@@ -31,6 +31,7 @@ ICON_FOLDER="󰉋"
 ICON_GIT="󰊢"
 ICON_CONTEXT="󱘲"
 ICON_TIME="󱦻"
+ICON_COMMIT="󰜘"
 
 # Circle slice icons for usage percentage
 get_circle_icon() {
@@ -58,9 +59,23 @@ case "$model_display" in
 esac
 MODEL_SEG="${BOLD}${MODEL_COLOR}${ICON_MODEL}${RESET} ${MODEL_COLOR}${model_display}${RESET}"
 
-# === DIRECTORY SEGMENT (full path) ===
+# === DIRECTORY SEGMENT (shortened: ~/…/parent/folder) ===
 current_dir=$(echo "$input" | jq -r '.workspace.current_dir // "/"')
-DIR_SEG="${DIR_ICON_COLOR}${ICON_FOLDER}${RESET} ${GRAY}${current_dir}${RESET}"
+# Replace home dir with ~
+if [[ "$current_dir" == "$HOME"* ]]; then
+    display_dir="~${current_dir#$HOME}"
+else
+    display_dir="$current_dir"
+fi
+# Shorten to ~/…/parent/folder if more than 4 levels deep
+IFS='/' read -ra parts <<< "$display_dir"
+num_parts=${#parts[@]}
+if [ "$num_parts" -gt 4 ]; then
+    parent="${parts[$((num_parts-2))]}"
+    folder="${parts[$((num_parts-1))]}"
+    display_dir="~/…/${parent}/${folder}"
+fi
+DIR_SEG="${DIR_ICON_COLOR}${ICON_FOLDER}${RESET} ${GRAY}${display_dir}${RESET}"
 
 # === GIT SEGMENT ===
 GIT_SEG=""
@@ -81,7 +96,7 @@ if git -C "$current_dir" rev-parse --git-dir >/dev/null 2>&1; then
         status_icon="●"
     fi
 
-    # Get ahead/behind
+    # Get ahead/behind and sync status
     ahead=$(git -C "$current_dir" rev-list --count @{u}..HEAD 2>/dev/null || echo "0")
     behind=$(git -C "$current_dir" rev-list --count HEAD..@{u} 2>/dev/null || echo "0")
 
@@ -89,7 +104,32 @@ if git -C "$current_dir" rev-parse --git-dir >/dev/null 2>&1; then
     [ "$ahead" -gt 0 ] 2>/dev/null && git_extra="${git_extra} ↑${ahead}"
     [ "$behind" -gt 0 ] 2>/dev/null && git_extra="${git_extra} ↓${behind}"
 
-    GIT_SEG="${GIT_COLOR}${ICON_GIT}${RESET} ${GIT_COLOR}${git_branch} ${status_icon}${git_extra}${RESET}"
+    # Remote sync icon
+    if [ "$ahead" -eq 0 ] && [ "$behind" -eq 0 ]; then
+        sync_icon=" 󰓦"  # synced
+    else
+        sync_icon=" 󰓧"  # diverged
+    fi
+
+    GIT_SEG="${GIT_COLOR}${ICON_GIT}${RESET} ${GIT_COLOR}${git_branch} ${status_icon}${sync_icon}${git_extra}${RESET}"
+
+    # Get last commit time
+    last_commit_ts=$(git -C "$current_dir" log -1 --format=%ct 2>/dev/null)
+    if [ -n "$last_commit_ts" ]; then
+        now=$(date +%s)
+        diff_seconds=$((now - last_commit_ts))
+
+        if [ "$diff_seconds" -lt 60 ]; then
+            commit_ago="${diff_seconds}s"
+        elif [ "$diff_seconds" -lt 3600 ]; then
+            commit_ago="$((diff_seconds / 60))m"
+        elif [ "$diff_seconds" -lt 86400 ]; then
+            commit_ago="$((diff_seconds / 3600))h"
+        else
+            commit_ago="$((diff_seconds / 86400))d"
+        fi
+        COMMIT_SEG="${GRAY}${ICON_COMMIT}${RESET} ${GRAY}${commit_ago}${RESET}"
+    fi
 fi
 
 # Get line changes for git segment
@@ -256,10 +296,13 @@ fi
 TIME_SEG="${TIME_COLOR}${ICON_TIME}${RESET} ${TIME_COLOR}${time_display}${RESET}"
 
 # === OUTPUT ===
-# Build output: Line 1 = stats, Line 2 = dir + git
+# Build output: Line 1 = stats, Line 2 = dir + git + commit
 LINE1="${MODEL_SEG}${SEP}${CONTEXT_SEG}${SEP}${USAGE_SEG}${SEP}${TIME_SEG}"
 if [ -n "$GIT_SEG" ]; then
     LINE2="${DIR_SEG}${SEP}${GIT_SEG}"
+    if [ -n "$COMMIT_SEG" ]; then
+        LINE2="${LINE2}${SEP}${COMMIT_SEG}"
+    fi
 else
     LINE2="${DIR_SEG}"
 fi
