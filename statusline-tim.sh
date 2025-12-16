@@ -47,6 +47,20 @@ get_circle_icon() {
     fi
 }
 
+# Get color based on percentage (original < 60, yellow 60-80, red > 80)
+# Usage: get_pct_color <percentage> <original_color>
+get_pct_color() {
+    local pct=$1
+    local original=$2
+    if [ "$pct" -lt 60 ]; then
+        echo "$original"
+    elif [ "$pct" -lt 80 ]; then
+        echo "$YELLOW"
+    else
+        echo "$RED"
+    fi
+}
+
 # Separator
 SEP="${GRAY} | ${RESET}"
 
@@ -165,13 +179,15 @@ fi
 
 if [ "$context_size" -gt 0 ] && [ "$total_tokens" -gt 0 ]; then
     pct_display=$(awk "BEGIN {printf \"%.0f\", ($total_tokens / $context_size) * 100}")
+    # Get dynamic color based on percentage (blue < 60, yellow 60-80, red > 80)
+    CTX_COLOR=$(get_pct_color "$pct_display" "$CONTEXT_COLOR")
     # Format tokens (e.g., 122k)
     if [ "$total_tokens" -ge 1000 ]; then
         tokens_display=$(awk "BEGIN {printf \"%.1fk\", $total_tokens / 1000}")
     else
         tokens_display="$total_tokens"
     fi
-    CONTEXT_SEG="${CONTEXT_COLOR}${ICON_CONTEXT}${RESET} ${CONTEXT_COLOR}${pct_display}% · ${tokens_display}${RESET}"
+    CONTEXT_SEG="${CTX_COLOR}${ICON_CONTEXT}${RESET} ${CTX_COLOR}${pct_display}% · ${tokens_display}${RESET}"
 else
     CONTEXT_SEG="${CONTEXT_COLOR}${ICON_CONTEXT}${RESET} ${CONTEXT_COLOR}0%${RESET}"
 fi
@@ -265,9 +281,10 @@ if [ -n "$usage_data" ]; then
         reset_formatted="?"
     fi
 
-    # Get dynamic circle icon
+    # Get dynamic circle icon and color (magenta < 60, yellow 60-80, red > 80)
     USAGE_ICON=$(get_circle_icon "$five_hour_int")
-    USAGE_SEG="${USAGE_COLOR}${USAGE_ICON}${RESET} ${USAGE_COLOR}${five_hour_int}% · ${reset_formatted}${RESET}"
+    USG_COLOR=$(get_pct_color "$five_hour_int" "$USAGE_COLOR")
+    USAGE_SEG="${USG_COLOR}${USAGE_ICON}${RESET} ${USG_COLOR}${five_hour_int}% · ${reset_formatted}${RESET}"
 else
     USAGE_SEG="${USAGE_COLOR}󰪞${RESET} ${USAGE_COLOR}?%${RESET}"
 fi
