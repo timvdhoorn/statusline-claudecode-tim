@@ -13,9 +13,9 @@ BOLD="\033[1m"
 MODEL_COLOR="\033[1;38;2;217;120;87m"     # #D97857
 DIR_ICON_COLOR="\033[1;38;2;229;192;123m"  # #E5C07B (Atom yellow)
 DIR_TEXT_COLOR="\033[1;38;2;35;207;136m"   # #23CF88 green
-CONTEXT_COLOR="\033[1;38;2;198;120;221m"   # #C678DD (Atom magenta)
+CONTEXT_COLOR="\033[1;38;2;97;175;239m"    # #61AFEF (Atom blue)
 GIT_COLOR="\033[1;38;2;209;154;102m"       # #D19A66 (Atom orange)
-USAGE_COLOR="\033[1;38;2;97;175;239m"      # #61AFEF (Atom blue)
+USAGE_COLOR="\033[1;38;2;198;120;221m"     # #C678DD (Atom magenta)
 SESSION_COLOR="\033[1;38;2;152;195;121m"   # #98C379 (Atom green)
 TIME_COLOR="\033[1;38;2;86;182;194m"       # #56B6C2 (Atom cyan)
 # Utility colors
@@ -138,7 +138,7 @@ fi
 
 # === API USAGE SEGMENT (from Anthropic API) ===
 CACHE_FILE="$HOME/.claude/statusline_usage_cache.json"
-CACHE_DURATION=300  # 5 minutes
+CACHE_DURATION=60  # 1 minute
 
 # Function to get OAuth token from Claude credentials (macOS Keychain first, then file)
 get_oauth_token() {
