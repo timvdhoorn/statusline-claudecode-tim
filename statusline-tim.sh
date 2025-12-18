@@ -22,11 +22,11 @@ RED=$'\033[1;38;5;167m'             # #E06C75 Atom red
 # Icons - korte afkortingen met :
 ICON_MODEL=""
 ICON_FOLDER=""
-ICON_GIT="GIT:"
-ICON_CONTEXT="CTX:"
-ICON_TIME="TM:"
-ICON_USAGE="5H:"
-ICON_COMMIT="CMT:"
+ICON_GIT="git:"
+ICON_CONTEXT="ctx:"
+ICON_TIME="tm:"
+ICON_USAGE="5h:"
+ICON_COMMIT="cmt:"
 ICON_SYNC="ok"
 ICON_DIVERGE="!!"
 
