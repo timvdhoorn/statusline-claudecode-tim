@@ -33,8 +33,8 @@ ICON_DIVERGE="!!"
 get_pct_color() {
     local pct=$1
     local original=$2
-    if [ "$pct" -lt 60 ]; then echo "$original"
-    elif [ "$pct" -lt 80 ]; then echo "$YELLOW"
+    if [ "$pct" -lt 70 ]; then echo "$original"
+    elif [ "$pct" -lt 90 ]; then echo "$YELLOW"
     else echo "$RED"
     fi
 }
