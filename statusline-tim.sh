@@ -6,24 +6,24 @@
 # Read JSON input from stdin
 input=$(cat)
 
-# Colors (ANSI escape codes) - Vibrant RGB colors
-RESET="\033[0m"
-BOLD="\033[1m"
+# Colors (ANSI escape codes) - Using $'...' syntax for reliable escaping
+RESET=$'\033[0m'
+BOLD=$'\033[1m'
 # Vibrant theme colors (true RGB)
-MODEL_COLOR="\033[1;38;2;217;120;87m"     # #D97857
-DIR_ICON_COLOR="\033[1;38;2;229;192;123m"  # #E5C07B (Atom yellow)
-DIR_TEXT_COLOR="\033[1;38;2;35;207;136m"   # #23CF88 green
-CONTEXT_COLOR="\033[1;38;2;97;175;239m"    # #61AFEF (Atom blue)
-GIT_COLOR="\033[1;38;2;209;154;102m"       # #D19A66 (Atom orange)
-USAGE_COLOR="\033[1;38;2;198;120;221m"     # #C678DD (Atom magenta)
-SESSION_COLOR="\033[1;38;2;152;195;121m"   # #98C379 (Atom green)
-TIME_COLOR="\033[1;38;2;86;182;194m"       # #56B6C2 (Atom cyan)
+MODEL_COLOR=$'\033[1;38;2;217;120;87m'     # #D97857
+DIR_ICON_COLOR=$'\033[1;38;2;229;192;123m'  # #E5C07B (Atom yellow)
+DIR_TEXT_COLOR=$'\033[1;38;2;35;207;136m'   # #23CF88 green
+CONTEXT_COLOR=$'\033[1;38;2;97;175;239m'    # #61AFEF (Atom blue)
+GIT_COLOR=$'\033[1;38;2;209;154;102m'       # #D19A66 (Atom orange)
+USAGE_COLOR=$'\033[1;38;2;198;120;221m'     # #C678DD (Atom magenta)
+SESSION_COLOR=$'\033[1;38;2;152;195;121m'   # #98C379 (Atom green)
+TIME_COLOR=$'\033[1;38;2;86;182;194m'       # #56B6C2 (Atom cyan)
 # Utility colors
-GRAY="\033[1;38;2;128;128;128m"
-GREEN="\033[1;38;2;152;195;121m"           # #98C379 (Atom green)
-YELLOW="\033[1;38;2;229;192;123m"          # #E5C07B (Atom yellow)
-RED="\033[1;38;2;224;108;117m"             # #E06C75 (Atom red)
-DIM="\033[2m"
+GRAY=$'\033[1;38;2;128;128;128m'
+GREEN=$'\033[1;38;2;152;195;121m'           # #98C379 (Atom green)
+YELLOW=$'\033[1;38;2;229;192;123m'          # #E5C07B (Atom yellow)
+RED=$'\033[1;38;2;224;108;117m'             # #E06C75 (Atom red)
+DIM=$'\033[2m'
 
 # Nerd Font Icons (from CCometixLine)
 ICON_MODEL="✳"
@@ -65,7 +65,7 @@ get_pct_color() {
 SEP="${GRAY} | ${RESET}"
 
 # === MODEL SEGMENT ===
-model_display=$(echo "$input" | jq -r '.model.display_name // "Unknown"')
+model_display=$(echo "$input" | jq -r '.model.display_name // "Unknown"' | tr -d '\n\r')
 case "$model_display" in
     *"Opus"*) model_display="Opus 4.5" ;;
     *"Sonnet"*) model_display="Sonnet 4" ;;
@@ -74,7 +74,7 @@ esac
 MODEL_SEG="${BOLD}${MODEL_COLOR}${ICON_MODEL}${RESET} ${MODEL_COLOR}${model_display}${RESET}"
 
 # === DIRECTORY SEGMENT (shortened: ~/…/parent/folder) ===
-current_dir=$(echo "$input" | jq -r '.workspace.current_dir // "/"')
+current_dir=$(echo "$input" | jq -r '.workspace.current_dir // "/"' | tr -d '\n\r')
 # Replace home dir with ~
 if [[ "$current_dir" == "$HOME"* ]]; then
     display_dir="~${current_dir#$HOME}"
@@ -147,8 +147,8 @@ if git -C "$current_dir" rev-parse --git-dir >/dev/null 2>&1; then
 fi
 
 # Get line changes for git segment
-lines_added=$(echo "$input" | jq -r '.cost.total_lines_added // 0')
-lines_removed=$(echo "$input" | jq -r '.cost.total_lines_removed // 0')
+lines_added=$(echo "$input" | jq -r '.cost.total_lines_added // 0' | tr -d '\n\r')
+lines_removed=$(echo "$input" | jq -r '.cost.total_lines_removed // 0' | tr -d '\n\r')
 line_changes=""
 if [ "$lines_added" -gt 0 ] || [ "$lines_removed" -gt 0 ]; then
     if [ "$lines_added" -gt 0 ] && [ "$lines_removed" -gt 0 ]; then
@@ -165,16 +165,16 @@ if [ "$lines_added" -gt 0 ] || [ "$lines_removed" -gt 0 ]; then
 fi
 
 # === CONTEXT WINDOW SEGMENT (minimal) ===
-context_size=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
-input_tokens=$(echo "$input" | jq -r '.context_window.current_usage.input_tokens // 0')
-output_tokens=$(echo "$input" | jq -r '.context_window.current_usage.output_tokens // 0')
-cache_creation=$(echo "$input" | jq -r '.context_window.current_usage.cache_creation_input_tokens // 0')
-cache_read=$(echo "$input" | jq -r '.context_window.current_usage.cache_read_input_tokens // 0')
+context_size=$(echo "$input" | jq -r '.context_window.context_window_size // 200000' | tr -d '\n\r')
+input_tokens=$(echo "$input" | jq -r '.context_window.current_usage.input_tokens // 0' | tr -d '\n\r')
+output_tokens=$(echo "$input" | jq -r '.context_window.current_usage.output_tokens // 0' | tr -d '\n\r')
+cache_creation=$(echo "$input" | jq -r '.context_window.current_usage.cache_creation_input_tokens // 0' | tr -d '\n\r')
+cache_read=$(echo "$input" | jq -r '.context_window.current_usage.cache_read_input_tokens // 0' | tr -d '\n\r')
 
 total_tokens=$((input_tokens + output_tokens + cache_creation + cache_read))
 
 if [ "$total_tokens" -eq 0 ]; then
-    total_tokens=$(echo "$input" | jq -r '.context_window.total_input_tokens // 0')
+    total_tokens=$(echo "$input" | jq -r '.context_window.total_input_tokens // 0' | tr -d '\n\r')
 fi
 
 if [ "$context_size" -gt 0 ] && [ "$total_tokens" -gt 0 ]; then
@@ -202,7 +202,7 @@ get_oauth_token() {
     local keychain_data=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
 
     if [ -n "$keychain_data" ]; then
-        local token=$(echo "$keychain_data" | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
+        local token=$(echo "$keychain_data" | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null | tr -d '\n\r')
         if [ -n "$token" ]; then
             echo "$token"
             return
@@ -212,7 +212,7 @@ get_oauth_token() {
     # Fallback to file
     local creds_file="$HOME/.claude/.credentials.json"
     if [ -f "$creds_file" ]; then
-        jq -r '.claudeAiOauth.accessToken // empty' "$creds_file" 2>/dev/null
+        jq -r '.claudeAiOauth.accessToken // empty' "$creds_file" 2>/dev/null | tr -d '\n\r'
     fi
 }
 
@@ -229,8 +229,8 @@ fetch_api_usage() {
         "https://api.anthropic.com/api/oauth/usage" 2>/dev/null)
 
     if [ -n "$response" ] && echo "$response" | jq -e '.five_hour' >/dev/null 2>&1; then
-        local five_hour=$(echo "$response" | jq -r '.five_hour.utilization // 0')
-        local resets_at=$(echo "$response" | jq -r '.five_hour.resets_at // ""')
+        local five_hour=$(echo "$response" | jq -r '.five_hour.utilization // 0' | tr -d '\n\r')
+        local resets_at=$(echo "$response" | jq -r '.five_hour.resets_at // ""' | tr -d '\n\r')
 
         # Cache the result
         echo "{\"five_hour\": $five_hour, \"resets_at\": \"$resets_at\", \"cached_at\": $(date +%s)}" > "$CACHE_FILE"
@@ -244,13 +244,13 @@ fetch_api_usage() {
 get_usage() {
     # Check cache first
     if [ -f "$CACHE_FILE" ]; then
-        local cached_at=$(jq -r '.cached_at // 0' "$CACHE_FILE" 2>/dev/null)
+        local cached_at=$(jq -r '.cached_at // 0' "$CACHE_FILE" 2>/dev/null | tr -d '\n\r')
         local now=$(date +%s)
         local age=$((now - cached_at))
 
         if [ "$age" -lt "$CACHE_DURATION" ]; then
-            local five_hour=$(jq -r '.five_hour // 0' "$CACHE_FILE")
-            local resets_at=$(jq -r '.resets_at // ""' "$CACHE_FILE")
+            local five_hour=$(jq -r '.five_hour // 0' "$CACHE_FILE" | tr -d '\n\r')
+            local resets_at=$(jq -r '.resets_at // ""' "$CACHE_FILE" | tr -d '\n\r')
             echo "$five_hour|$resets_at"
             return 0
         fi
@@ -290,7 +290,7 @@ else
 fi
 
 # === SESSION TIME SEGMENT ===
-duration_ms=$(echo "$input" | jq -r '.cost.total_duration_ms // 0')
+duration_ms=$(echo "$input" | jq -r '.cost.total_duration_ms // 0' | tr -d '\n\r')
 
 if [ "$duration_ms" -gt 0 ]; then
     total_seconds=$((duration_ms / 1000))
@@ -323,4 +323,4 @@ if [ -n "$GIT_SEG" ]; then
 else
     LINE2="${DIR_SEG}"
 fi
-echo -e "${LINE1}\n${LINE2}"
+printf '%s\n%s\n' "$LINE1" "$LINE2"
