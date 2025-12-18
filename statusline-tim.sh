@@ -172,12 +172,15 @@ get_cached_usage() {
         local cached_at=$(jq -r '.cached_at // 0' "$CACHE_FILE" 2>/dev/null | tr -d '\n\r')
         local now=$(date +%s)
         local age=$((now - cached_at))
-        if [ "$age" -lt 60 ]; then
-            jq -r '"\(.five_hour // 0)|\(.resets_at // "")"' "$CACHE_FILE" 2>/dev/null | tr -d '\n\r'
-            return 0
+        # Always return cached data if available
+        local data=$(jq -r '"\(.five_hour // 0)|\(.resets_at // "")"' "$CACHE_FILE" 2>/dev/null | tr -d '\n\r')
+        if [ -n "$data" ] && [ "$data" != "|" ]; then
+            echo "$data"
+            # Return 0 if fresh, 1 if stale (needs refresh)
+            [ "$age" -lt 60 ] && return 0 || return 1
         fi
     fi
-    return 1
+    return 2  # No cache at all
 }
 
 fetch_usage_background() {
@@ -206,7 +209,11 @@ fetch_usage_background() {
 }
 
 usage_data=$(get_cached_usage)
-if [ -z "$usage_data" ]; then
+cache_status=$?
+# 0=fresh, 1=stale (refresh in background), 2=no cache
+if [ "$cache_status" -eq 1 ]; then
+    fetch_usage_background
+elif [ "$cache_status" -eq 2 ]; then
     fetch_usage_background
     usage_data="0|"
 fi
