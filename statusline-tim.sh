@@ -1,116 +1,103 @@
 #!/bin/bash
 # Tim's Custom Statusline for Claude Code
-# Uses new current_usage field from Claude Code 2.0.70+ for accurate context window percentage
-# Includes visual progress bar and API usage tracking
+# 256-color, 2 lines, NO Nerd Font icons (VS Code compatible)
 
-# Read JSON input from stdin
+exec 2>/dev/null
+
 input=$(cat)
 
-# Colors (ANSI escape codes) - Using $'...' syntax for reliable escaping
+# Colors (256-color Atom One Dark theme)
 RESET=$'\033[0m'
-BOLD=$'\033[1m'
-# Vibrant theme colors (true RGB)
-MODEL_COLOR=$'\033[1;38;2;217;120;87m'     # #D97857
-DIR_ICON_COLOR=$'\033[1;38;2;229;192;123m'  # #E5C07B (Atom yellow)
-DIR_TEXT_COLOR=$'\033[1;38;2;35;207;136m'   # #23CF88 green
-CONTEXT_COLOR=$'\033[1;38;2;97;175;239m'    # #61AFEF (Atom blue)
-GIT_COLOR=$'\033[1;38;2;209;154;102m'       # #D19A66 (Atom orange)
-USAGE_COLOR=$'\033[1;38;2;198;120;221m'     # #C678DD (Atom magenta)
-SESSION_COLOR=$'\033[1;38;2;152;195;121m'   # #98C379 (Atom green)
-TIME_COLOR=$'\033[1;38;2;86;182;194m'       # #56B6C2 (Atom cyan)
-# Utility colors
-GRAY=$'\033[1;38;2;128;128;128m'
-GREEN=$'\033[1;38;2;152;195;121m'           # #98C379 (Atom green)
-YELLOW=$'\033[1;38;2;229;192;123m'          # #E5C07B (Atom yellow)
-RED=$'\033[1;38;2;224;108;117m'             # #E06C75 (Atom red)
-DIM=$'\033[2m'
+MODEL_COLOR=$'\033[1;38;5;173m'     # #D97857 rust orange
+DIR_COLOR=$'\033[1;38;5;114m'       # #98C379 Atom green
+CONTEXT_COLOR=$'\033[1;38;5;111m'   # #61AFEF Atom blue
+GIT_COLOR=$'\033[1;38;5;180m'       # #D19A66 Atom orange
+USAGE_COLOR=$'\033[1;38;5;176m'     # #C678DD Atom magenta
+TIME_COLOR=$'\033[1;38;5;80m'       # #56B6C2 Atom cyan
+GRAY=$'\033[38;5;244m'              # Gray for labels
+GREEN=$'\033[1;38;5;114m'           # #98C379 Atom green
+YELLOW=$'\033[1;38;5;179m'          # #E5C07B Atom yellow
+RED=$'\033[1;38;5;167m'             # #E06C75 Atom red
 
-# Nerd Font Icons (from CCometixLine)
-ICON_MODEL="✳"
-ICON_FOLDER="󰉋"
-ICON_GIT="󰊢"
-ICON_CONTEXT="󱘲"
-ICON_TIME="󱦻"
-ICON_COMMIT="󰜘"
+# Icons - korte afkortingen met :
+ICON_MODEL=""
+ICON_FOLDER=""
+ICON_GIT="GIT:"
+ICON_CONTEXT="CTX:"
+ICON_TIME="TM:"
+ICON_USAGE="5H:"
+ICON_COMMIT="CMT:"
+ICON_SYNC="ok"
+ICON_DIVERGE="!!"
 
-# Circle slice icons for usage percentage
-get_circle_icon() {
-    local pct=$1
-    if [ "$pct" -le 12 ]; then echo "󰪞"
-    elif [ "$pct" -le 25 ]; then echo "󰪟"
-    elif [ "$pct" -le 37 ]; then echo "󰪠"
-    elif [ "$pct" -le 50 ]; then echo "󰪡"
-    elif [ "$pct" -le 62 ]; then echo "󰪢"
-    elif [ "$pct" -le 75 ]; then echo "󰪣"
-    elif [ "$pct" -le 87 ]; then echo "󰪤"
-    else echo "󰪥"
-    fi
-}
-
-# Get color based on percentage (original < 60, yellow 60-80, red > 80)
-# Usage: get_pct_color <percentage> <original_color>
 get_pct_color() {
     local pct=$1
     local original=$2
-    if [ "$pct" -lt 60 ]; then
-        echo "$original"
-    elif [ "$pct" -lt 80 ]; then
-        echo "$YELLOW"
-    else
-        echo "$RED"
+    if [ "$pct" -lt 60 ]; then echo "$original"
+    elif [ "$pct" -lt 80 ]; then echo "$YELLOW"
+    else echo "$RED"
     fi
 }
 
-# Separator
+# Dynamic circle icon for usage (iTerm only)
+get_usage_icon() {
+    local pct=$1
+    if [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
+        if [ "$pct" -le 12 ]; then echo "󰪞"
+        elif [ "$pct" -le 25 ]; then echo "󰪟"
+        elif [ "$pct" -le 37 ]; then echo "󰪠"
+        elif [ "$pct" -le 50 ]; then echo "󰪡"
+        elif [ "$pct" -le 62 ]; then echo "󰪢"
+        elif [ "$pct" -le 75 ]; then echo "󰪣"
+        elif [ "$pct" -le 87 ]; then echo "󰪤"
+        else echo "󰪥"
+        fi
+    else
+        echo "$ICON_USAGE"
+    fi
+}
+
 SEP="${GRAY} | ${RESET}"
 
-# === MODEL SEGMENT ===
+# === MODEL ===
 model_display=$(echo "$input" | jq -r '.model.display_name // "Unknown"' | tr -d '\n\r')
 case "$model_display" in
     *"Opus"*) model_display="Opus 4.5" ;;
     *"Sonnet"*) model_display="Sonnet 4" ;;
     *"Haiku"*) model_display="Haiku" ;;
 esac
-MODEL_SEG="${BOLD}${MODEL_COLOR}${ICON_MODEL}${RESET} ${MODEL_COLOR}${model_display}${RESET}"
+MODEL_SEG="${MODEL_COLOR}${model_display}${RESET}"
 
-# === DIRECTORY SEGMENT (shortened: ~/…/parent/folder) ===
+# === DIRECTORY ===
 current_dir=$(echo "$input" | jq -r '.workspace.current_dir // "/"' | tr -d '\n\r')
-# Replace home dir with ~
 if [[ "$current_dir" == "$HOME"* ]]; then
     display_dir="~${current_dir#$HOME}"
 else
     display_dir="$current_dir"
 fi
-# Shorten to ~/…/parent/folder if more than 4 levels deep
 IFS='/' read -ra parts <<< "$display_dir"
 num_parts=${#parts[@]}
 if [ "$num_parts" -gt 4 ]; then
-    parent="${parts[$((num_parts-2))]}"
-    folder="${parts[$((num_parts-1))]}"
-    display_dir="~/…/${parent}/${folder}"
+    display_dir="~/…/${parts[$((num_parts-2))]}/${parts[$((num_parts-1))]}"
 fi
-DIR_SEG="${DIR_ICON_COLOR}${ICON_FOLDER}${RESET} ${GRAY}${display_dir}${RESET}"
+DIR_SEG="${DIR_COLOR}${display_dir}${RESET}"
 
-# === GIT SEGMENT ===
+# === GIT ===
 GIT_SEG=""
-if git -C "$current_dir" rev-parse --git-dir >/dev/null 2>&1; then
-    # Get branch name
-    git_branch=$(git -C "$current_dir" branch --show-current 2>/dev/null)
-    if [ -z "$git_branch" ]; then
-        git_branch="detached"
-    fi
+COMMIT_SEG=""
+if [ -d "$current_dir" ] && git -C "$current_dir" rev-parse --git-dir >/dev/null 2>&1; then
+    git_branch=$(git -C "$current_dir" branch --show-current 2>/dev/null || echo "detached")
+    [ -z "$git_branch" ] && git_branch="detached"
 
-    # Get status (clean/dirty)
     git_status=$(git -C "$current_dir" status --porcelain 2>/dev/null)
     if [ -z "$git_status" ]; then
         status_icon="✓"
-    elif echo "$git_status" | grep -qE "^(UU|AA|DD)"; then
+    elif echo "$git_status" | grep -qE "^(UU|AA|DD)" 2>/dev/null; then
         status_icon="⚠"
     else
         status_icon="●"
     fi
 
-    # Get ahead/behind and sync status
     ahead=$(git -C "$current_dir" rev-list --count @{u}..HEAD 2>/dev/null || echo "0")
     behind=$(git -C "$current_dir" rev-list --count HEAD..@{u} 2>/dev/null || echo "0")
 
@@ -118,21 +105,19 @@ if git -C "$current_dir" rev-parse --git-dir >/dev/null 2>&1; then
     [ "$ahead" -gt 0 ] 2>/dev/null && git_extra="${git_extra} ↑${ahead}"
     [ "$behind" -gt 0 ] 2>/dev/null && git_extra="${git_extra} ↓${behind}"
 
-    # Remote sync icon
-    if [ "$ahead" -eq 0 ] && [ "$behind" -eq 0 ]; then
-        sync_icon=" 󰓦"  # synced
+    if [ "$ahead" -eq 0 ] 2>/dev/null && [ "$behind" -eq 0 ] 2>/dev/null; then
+        sync_icon=" ${ICON_SYNC}"
     else
-        sync_icon=" 󰓧"  # diverged
+        sync_icon=" ${ICON_DIVERGE}"
     fi
 
-    GIT_SEG="${GIT_COLOR}${ICON_GIT}${RESET} ${GIT_COLOR}${git_branch} ${status_icon}${sync_icon}${git_extra}${RESET}"
+    GIT_SEG="${GRAY}${ICON_GIT}${RESET} ${GIT_COLOR}${git_branch} ${status_icon}${sync_icon}${git_extra}${RESET}"
 
-    # Get last commit time
+    # Commit time
     last_commit_ts=$(git -C "$current_dir" log -1 --format=%ct 2>/dev/null)
-    if [ -n "$last_commit_ts" ]; then
+    if [ -n "$last_commit_ts" ] && [ "$last_commit_ts" -gt 0 ] 2>/dev/null; then
         now=$(date +%s)
         diff_seconds=$((now - last_commit_ts))
-
         if [ "$diff_seconds" -lt 60 ]; then
             commit_ago="${diff_seconds}s"
         elif [ "$diff_seconds" -lt 3600 ]; then
@@ -142,29 +127,21 @@ if git -C "$current_dir" rev-parse --git-dir >/dev/null 2>&1; then
         else
             commit_ago="$((diff_seconds / 86400))d"
         fi
-        COMMIT_SEG="${GRAY}${ICON_COMMIT}${RESET} ${GRAY}${commit_ago}${RESET}"
+        COMMIT_SEG="${GRAY}${ICON_COMMIT} ${commit_ago}${RESET}"
     fi
 fi
 
-# Get line changes for git segment
+# Line changes
 lines_added=$(echo "$input" | jq -r '.cost.total_lines_added // 0' | tr -d '\n\r')
 lines_removed=$(echo "$input" | jq -r '.cost.total_lines_removed // 0' | tr -d '\n\r')
-line_changes=""
-if [ "$lines_added" -gt 0 ] || [ "$lines_removed" -gt 0 ]; then
-    if [ "$lines_added" -gt 0 ] && [ "$lines_removed" -gt 0 ]; then
-        line_changes=" ${GREEN}+${lines_added}${RESET} ${RED}-${lines_removed}${RESET}"
-    elif [ "$lines_added" -gt 0 ]; then
-        line_changes=" ${GREEN}+${lines_added}${RESET}"
-    else
-        line_changes=" ${RED}-${lines_removed}${RESET}"
-    fi
-    # Append to git segment if it exists
-    if [ -n "$GIT_SEG" ]; then
-        GIT_SEG="${GIT_SEG}${line_changes}"
-    fi
+if [ "${lines_added:-0}" -gt 0 ] 2>/dev/null || [ "${lines_removed:-0}" -gt 0 ] 2>/dev/null; then
+    line_changes=""
+    [ "${lines_added:-0}" -gt 0 ] 2>/dev/null && line_changes="${line_changes} ${GREEN}+${lines_added}${RESET}"
+    [ "${lines_removed:-0}" -gt 0 ] 2>/dev/null && line_changes="${line_changes} ${RED}-${lines_removed}${RESET}"
+    [ -n "$GIT_SEG" ] && GIT_SEG="${GIT_SEG}${line_changes}"
 fi
 
-# === CONTEXT WINDOW SEGMENT (minimal) ===
+# === CONTEXT ===
 context_size=$(echo "$input" | jq -r '.context_window.context_window_size // 200000' | tr -d '\n\r')
 input_tokens=$(echo "$input" | jq -r '.context_window.current_usage.input_tokens // 0' | tr -d '\n\r')
 output_tokens=$(echo "$input" | jq -r '.context_window.current_usage.output_tokens // 0' | tr -d '\n\r')
@@ -172,155 +149,102 @@ cache_creation=$(echo "$input" | jq -r '.context_window.current_usage.cache_crea
 cache_read=$(echo "$input" | jq -r '.context_window.current_usage.cache_read_input_tokens // 0' | tr -d '\n\r')
 
 total_tokens=$((input_tokens + output_tokens + cache_creation + cache_read))
+[ "$total_tokens" -eq 0 ] && total_tokens=$(echo "$input" | jq -r '.context_window.total_input_tokens // 0' | tr -d '\n\r')
 
-if [ "$total_tokens" -eq 0 ]; then
-    total_tokens=$(echo "$input" | jq -r '.context_window.total_input_tokens // 0' | tr -d '\n\r')
-fi
-
-if [ "$context_size" -gt 0 ] && [ "$total_tokens" -gt 0 ]; then
+if [ "${context_size:-0}" -gt 0 ] 2>/dev/null && [ "${total_tokens:-0}" -gt 0 ] 2>/dev/null; then
     pct_display=$(awk "BEGIN {printf \"%.0f\", ($total_tokens / $context_size) * 100}")
-    # Get dynamic color based on percentage (blue < 60, yellow 60-80, red > 80)
     CTX_COLOR=$(get_pct_color "$pct_display" "$CONTEXT_COLOR")
-    # Format tokens (e.g., 122k)
     if [ "$total_tokens" -ge 1000 ]; then
         tokens_display=$(awk "BEGIN {printf \"%.1fk\", $total_tokens / 1000}")
     else
         tokens_display="$total_tokens"
     fi
-    CONTEXT_SEG="${CTX_COLOR}${ICON_CONTEXT}${RESET} ${CTX_COLOR}${pct_display}% · ${tokens_display}${RESET}"
+    CONTEXT_SEG="${GRAY}${ICON_CONTEXT}${RESET} ${CTX_COLOR}${pct_display}% · ${tokens_display}${RESET}"
 else
-    CONTEXT_SEG="${CONTEXT_COLOR}${ICON_CONTEXT}${RESET} ${CONTEXT_COLOR}0%${RESET}"
+    CONTEXT_SEG="${GRAY}${ICON_CONTEXT}${RESET} ${CONTEXT_COLOR}0%${RESET}"
 fi
 
-# === API USAGE SEGMENT (from Anthropic API) ===
+# === API USAGE ===
 CACHE_FILE="$HOME/.claude/statusline_usage_cache.json"
-CACHE_DURATION=60  # 1 minute
 
-# Function to get OAuth token from Claude credentials (macOS Keychain first, then file)
-get_oauth_token() {
-    # Try macOS Keychain first (use service name only, let security find the account)
-    local keychain_data=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
-
-    if [ -n "$keychain_data" ]; then
-        local token=$(echo "$keychain_data" | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null | tr -d '\n\r')
-        if [ -n "$token" ]; then
-            echo "$token"
-            return
-        fi
-    fi
-
-    # Fallback to file
-    local creds_file="$HOME/.claude/.credentials.json"
-    if [ -f "$creds_file" ]; then
-        jq -r '.claudeAiOauth.accessToken // empty' "$creds_file" 2>/dev/null | tr -d '\n\r'
-    fi
-}
-
-# Function to fetch API usage
-fetch_api_usage() {
-    local token=$(get_oauth_token)
-    if [ -z "$token" ]; then
-        return 1
-    fi
-
-    local response=$(curl -s --max-time 2 \
-        -H "Authorization: Bearer $token" \
-        -H "anthropic-beta: oauth-2025-04-20" \
-        "https://api.anthropic.com/api/oauth/usage" 2>/dev/null)
-
-    if [ -n "$response" ] && echo "$response" | jq -e '.five_hour' >/dev/null 2>&1; then
-        local five_hour=$(echo "$response" | jq -r '.five_hour.utilization // 0' | tr -d '\n\r')
-        local resets_at=$(echo "$response" | jq -r '.five_hour.resets_at // ""' | tr -d '\n\r')
-
-        # Cache the result
-        echo "{\"five_hour\": $five_hour, \"resets_at\": \"$resets_at\", \"cached_at\": $(date +%s)}" > "$CACHE_FILE"
-        echo "$five_hour|$resets_at"
-        return 0
-    fi
-    return 1
-}
-
-# Get usage (from cache or API)
-get_usage() {
-    # Check cache first
+get_cached_usage() {
     if [ -f "$CACHE_FILE" ]; then
         local cached_at=$(jq -r '.cached_at // 0' "$CACHE_FILE" 2>/dev/null | tr -d '\n\r')
         local now=$(date +%s)
         local age=$((now - cached_at))
-
-        if [ "$age" -lt "$CACHE_DURATION" ]; then
-            local five_hour=$(jq -r '.five_hour // 0' "$CACHE_FILE" | tr -d '\n\r')
-            local resets_at=$(jq -r '.resets_at // ""' "$CACHE_FILE" | tr -d '\n\r')
-            echo "$five_hour|$resets_at"
+        if [ "$age" -lt 60 ]; then
+            jq -r '"\(.five_hour // 0)|\(.resets_at // "")"' "$CACHE_FILE" 2>/dev/null | tr -d '\n\r'
             return 0
         fi
     fi
-
-    # Fetch fresh data
-    fetch_api_usage
+    return 1
 }
 
-usage_data=$(get_usage)
-if [ -n "$usage_data" ]; then
-    five_hour_pct=$(echo "$usage_data" | cut -d'|' -f1)
-    resets_at=$(echo "$usage_data" | cut -d'|' -f2)
-
-    # Round percentage
-    five_hour_int=$(awk "BEGIN {printf \"%.0f\", $five_hour_pct}")
-
-    # Format reset time (dd-MM hh:mm) with timezone conversion
-    if [ -n "$resets_at" ] && [ "$resets_at" != "null" ] && [ "$resets_at" != "" ]; then
-        clean_date="${resets_at%%.*}"
-        unix_ts=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%S" "$clean_date" "+%s" 2>/dev/null)
-        if [ -n "$unix_ts" ]; then
-            reset_formatted=$(date -j -f "%s" "$unix_ts" "+%d-%m %H:%M" 2>/dev/null || echo "?")
-        else
-            reset_formatted="?"
+fetch_usage_background() {
+    (
+        local token=""
+        local keychain_data=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
+        if [ -n "$keychain_data" ]; then
+            token=$(echo "$keychain_data" | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null | tr -d '\n\r')
         fi
-    else
-        reset_formatted="?"
-    fi
+        if [ -z "$token" ] && [ -f "$HOME/.claude/.credentials.json" ]; then
+            token=$(jq -r '.claudeAiOauth.accessToken // empty' "$HOME/.claude/.credentials.json" 2>/dev/null | tr -d '\n\r')
+        fi
+        [ -z "$token" ] && exit 0
 
-    # Get dynamic circle icon and color (magenta < 60, yellow 60-80, red > 80)
-    USAGE_ICON=$(get_circle_icon "$five_hour_int")
-    USG_COLOR=$(get_pct_color "$five_hour_int" "$USAGE_COLOR")
-    USAGE_SEG="${USG_COLOR}${USAGE_ICON}${RESET} ${USG_COLOR}${five_hour_int}% · ${reset_formatted}${RESET}"
-else
-    USAGE_SEG="${USAGE_COLOR}󰪞${RESET} ${USAGE_COLOR}?%${RESET}"
+        local response=$(curl -s --max-time 2 \
+            -H "Authorization: Bearer $token" \
+            -H "anthropic-beta: oauth-2025-04-20" \
+            "https://api.anthropic.com/api/oauth/usage" 2>/dev/null)
+
+        if [ -n "$response" ] && echo "$response" | jq -e '.five_hour' >/dev/null 2>&1; then
+            local five_hour=$(echo "$response" | jq -r '.five_hour.utilization // 0' | tr -d '\n\r')
+            local resets_at=$(echo "$response" | jq -r '.five_hour.resets_at // ""' | tr -d '\n\r')
+            echo "{\"five_hour\": $five_hour, \"resets_at\": \"$resets_at\", \"cached_at\": $(date +%s)}" > "$CACHE_FILE"
+        fi
+    ) >/dev/null 2>&1 &
+}
+
+usage_data=$(get_cached_usage)
+if [ -z "$usage_data" ]; then
+    fetch_usage_background
+    usage_data="0|"
 fi
 
-# === SESSION TIME SEGMENT ===
+five_hour_pct=$(echo "$usage_data" | cut -d'|' -f1)
+resets_at=$(echo "$usage_data" | cut -d'|' -f2)
+five_hour_int=$(awk "BEGIN {printf \"%.0f\", ${five_hour_pct:-0}}" 2>/dev/null || echo "0")
+
+reset_formatted="?"
+if [ -n "$resets_at" ] && [ "$resets_at" != "null" ] && [ "$resets_at" != "" ]; then
+    clean_date="${resets_at%%.*}"
+    unix_ts=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%S" "$clean_date" "+%s" 2>/dev/null)
+    [ -n "$unix_ts" ] && reset_formatted=$(date -j -f "%s" "$unix_ts" "+%d-%m %H:%M" 2>/dev/null || echo "?")
+fi
+
+USG_COLOR=$(get_pct_color "${five_hour_int:-0}" "$USAGE_COLOR")
+USAGE_SEG="${GRAY}${ICON_USAGE}${RESET} ${USG_COLOR}${five_hour_int:-0}% · ${reset_formatted}${RESET}"
+
+# === SESSION TIME ===
 duration_ms=$(echo "$input" | jq -r '.cost.total_duration_ms // 0' | tr -d '\n\r')
-
-if [ "$duration_ms" -gt 0 ]; then
+if [ "${duration_ms:-0}" -gt 0 ] 2>/dev/null; then
     total_seconds=$((duration_ms / 1000))
-
     if [ "$total_seconds" -ge 3600 ]; then
-        hours=$((total_seconds / 3600))
-        minutes=$(((total_seconds % 3600) / 60))
-        time_display="${hours}h${minutes}m"
+        time_display="$((total_seconds / 3600))h$(((total_seconds % 3600) / 60))m"
     elif [ "$total_seconds" -ge 60 ]; then
-        minutes=$((total_seconds / 60))
-        seconds=$((total_seconds % 60))
-        time_display="${minutes}m${seconds}s"
+        time_display="$((total_seconds / 60))m$((total_seconds % 60))s"
     else
         time_display="${total_seconds}s"
     fi
 else
     time_display="0s"
 fi
+TIME_SEG="${GRAY}${ICON_TIME}${RESET} ${TIME_COLOR}${time_display}${RESET}"
 
-TIME_SEG="${TIME_COLOR}${ICON_TIME}${RESET} ${TIME_COLOR}${time_display}${RESET}"
-
-# === OUTPUT ===
-# Build output: Line 1 = stats, Line 2 = dir + git + commit
+# === OUTPUT (2 lines) ===
 LINE1="${MODEL_SEG}${SEP}${CONTEXT_SEG}${SEP}${USAGE_SEG}${SEP}${TIME_SEG}"
-if [ -n "$GIT_SEG" ]; then
-    LINE2="${DIR_SEG}${SEP}${GIT_SEG}"
-    if [ -n "$COMMIT_SEG" ]; then
-        LINE2="${LINE2}${SEP}${COMMIT_SEG}"
-    fi
-else
-    LINE2="${DIR_SEG}"
-fi
+LINE2="${DIR_SEG}"
+[ -n "$GIT_SEG" ] && LINE2="${LINE2}${SEP}${GIT_SEG}"
+[ -n "$COMMIT_SEG" ] && LINE2="${LINE2}${SEP}${COMMIT_SEG}"
+
 printf '%s\n%s\n' "$LINE1" "$LINE2"
