@@ -1,9 +1,6 @@
 // src/App.tsx
-import { useState, useEffect } from 'react';
-import { Box, Text } from 'ink';
-import type { StatuslineInput, GitInfo } from './types';
-import { getGitInfo } from './utils/git';
-import { useApiUsage } from './hooks/useApiUsage';
+import { Box } from 'ink';
+import type { StatuslineInput, GitInfo, UsageData } from './types';
 import { ModelSegment } from './components/ModelSegment';
 import { DirSegment } from './components/DirSegment';
 import { GitSegment } from './components/GitSegment';
@@ -15,16 +12,12 @@ import { Separator } from './components/Separator';
 
 interface Props {
   input: StatuslineInput;
+  gitInfo: GitInfo | null;
+  usage: UsageData | null;
 }
 
-export function App({ input }: Props) {
-  const [gitInfo, setGitInfo] = useState<GitInfo | null>(null);
-  const usage = useApiUsage();
+export function App({ input, gitInfo, usage }: Props) {
   const currentDir = input.workspace.current_dir;
-
-  useEffect(() => {
-    getGitInfo(currentDir).then(setGitInfo);
-  }, [currentDir]);
 
   return (
     <Box flexDirection="column">
