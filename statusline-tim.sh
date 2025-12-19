@@ -163,14 +163,14 @@ if [ "${context_size:-0}" -gt 0 ] 2>/dev/null && [ "${total_tokens:-0}" -gt 0 ] 
     fi
     # Cache valid context data
     echo "{\"pct\": $pct_display, \"tokens\": \"$tokens_display\", \"cached_at\": $(date +%s)}" > "$CTX_CACHE_FILE" 2>/dev/null
-    CONTEXT_SEG="${GRAY}${ICON_CONTEXT}${RESET} ${CTX_COLOR}${pct_display}% · ${tokens_display}${RESET}"
+    CONTEXT_SEG="${GRAY}${ICON_CONTEXT}${RESET} ${CTX_COLOR}${pct_display}%${RESET} ${GRAY}· ${tokens_display}${RESET}"
 else
     # Try to use cached context data
     if [ -f "$CTX_CACHE_FILE" ]; then
         cached_pct=$(jq -r '.pct // 0' "$CTX_CACHE_FILE" 2>/dev/null | tr -d '\n\r')
         cached_tokens=$(jq -r '.tokens // "0"' "$CTX_CACHE_FILE" 2>/dev/null | tr -d '\n\r')
         CTX_COLOR=$(get_pct_color "${cached_pct:-0}" "$CONTEXT_COLOR")
-        CONTEXT_SEG="${GRAY}${ICON_CONTEXT}${RESET} ${CTX_COLOR}${cached_pct:-0}% · ${cached_tokens}${RESET}"
+        CONTEXT_SEG="${GRAY}${ICON_CONTEXT}${RESET} ${CTX_COLOR}${cached_pct:-0}%${RESET} ${GRAY}· ${cached_tokens}${RESET}"
     else
         CONTEXT_SEG="${GRAY}${ICON_CONTEXT}${RESET} ${CONTEXT_COLOR}0%${RESET}"
     fi
@@ -238,11 +238,19 @@ reset_formatted="?"
 if [ -n "$resets_at" ] && [ "$resets_at" != "null" ] && [ "$resets_at" != "" ]; then
     clean_date="${resets_at%%.*}"
     unix_ts=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%S" "$clean_date" "+%s" 2>/dev/null)
-    [ -n "$unix_ts" ] && reset_formatted=$(date -j -f "%s" "$unix_ts" "+%d-%m %H:%M" 2>/dev/null || echo "?")
+    if [ -n "$unix_ts" ]; then
+        today=$(date "+%Y-%m-%d")
+        reset_day=$(date -j -f "%s" "$unix_ts" "+%Y-%m-%d" 2>/dev/null)
+        if [ "$today" = "$reset_day" ]; then
+            reset_formatted=$(date -j -f "%s" "$unix_ts" "+%H:%M" 2>/dev/null || echo "?")
+        else
+            reset_formatted=$(date -j -f "%s" "$unix_ts" "+%d-%m %H:%M" 2>/dev/null || echo "?")
+        fi
+    fi
 fi
 
 USG_COLOR=$(get_pct_color "${five_hour_int:-0}" "$USAGE_COLOR")
-USAGE_SEG="${GRAY}${ICON_USAGE}${RESET} ${USG_COLOR}${five_hour_int:-0}% · ${reset_formatted}${RESET}"
+USAGE_SEG="${GRAY}${ICON_USAGE}${RESET} ${USG_COLOR}${five_hour_int:-0}%${RESET} ${GRAY}· ${reset_formatted}${RESET}"
 
 # === SESSION TIME ===
 duration_ms=$(echo "$input" | jq -r '.cost.total_duration_ms // 0' | tr -d '\n\r')
@@ -251,12 +259,12 @@ if [ "${duration_ms:-0}" -gt 0 ] 2>/dev/null; then
     if [ "$total_seconds" -ge 3600 ]; then
         time_display="$((total_seconds / 3600))h$(((total_seconds % 3600) / 60))m"
     elif [ "$total_seconds" -ge 60 ]; then
-        time_display="$((total_seconds / 60))m$((total_seconds % 60))s"
+        time_display="$((total_seconds / 60))m"
     else
-        time_display="${total_seconds}s"
+        time_display="<1m"
     fi
 else
-    time_display="0s"
+    time_display="0m"
 fi
 TIME_SEG="${TIME_COLOR}${time_display}${RESET}"
 
