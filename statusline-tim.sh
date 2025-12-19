@@ -22,9 +22,9 @@ RED=$'\033[1;38;5;167m'             # #E06C75 Atom red
 # Icons - korte afkortingen met :
 ICON_MODEL=""
 ICON_FOLDER=""
-ICON_GIT="git"
+ICON_GIT=""
 ICON_CONTEXT="ctx"
-ICON_TIME="tm"
+ICON_TIME=""
 ICON_USAGE="5h"
 ICON_COMMIT="cmt"
 ICON_SYNC="ok"
@@ -111,7 +111,7 @@ if [ -d "$current_dir" ] && git -C "$current_dir" rev-parse --git-dir >/dev/null
         sync_icon=" ${ICON_DIVERGE}"
     fi
 
-    GIT_SEG="${GRAY}${ICON_GIT}${RESET} ${GIT_COLOR}${git_branch} ${status_icon}${sync_icon}${git_extra}${RESET}"
+    GIT_SEG="${GIT_COLOR}${git_branch} ${status_icon}${sync_icon}${git_extra}${RESET}"
 
     # Commit time
     last_commit_ts=$(git -C "$current_dir" log -1 --format=%ct 2>/dev/null)
@@ -142,6 +142,8 @@ if [ "${lines_added:-0}" -gt 0 ] 2>/dev/null || [ "${lines_removed:-0}" -gt 0 ] 
 fi
 
 # === CONTEXT ===
+CTX_CACHE_FILE="$HOME/.claude/statusline_ctx_cache.json"
+
 context_size=$(echo "$input" | jq -r '.context_window.context_window_size // 200000' | tr -d '\n\r')
 input_tokens=$(echo "$input" | jq -r '.context_window.current_usage.input_tokens // 0' | tr -d '\n\r')
 output_tokens=$(echo "$input" | jq -r '.context_window.current_usage.output_tokens // 0' | tr -d '\n\r')
@@ -159,9 +161,19 @@ if [ "${context_size:-0}" -gt 0 ] 2>/dev/null && [ "${total_tokens:-0}" -gt 0 ] 
     else
         tokens_display="$total_tokens"
     fi
+    # Cache valid context data
+    echo "{\"pct\": $pct_display, \"tokens\": \"$tokens_display\", \"cached_at\": $(date +%s)}" > "$CTX_CACHE_FILE" 2>/dev/null
     CONTEXT_SEG="${GRAY}${ICON_CONTEXT}${RESET} ${CTX_COLOR}${pct_display}% · ${tokens_display}${RESET}"
 else
-    CONTEXT_SEG="${GRAY}${ICON_CONTEXT}${RESET} ${CONTEXT_COLOR}0%${RESET}"
+    # Try to use cached context data
+    if [ -f "$CTX_CACHE_FILE" ]; then
+        cached_pct=$(jq -r '.pct // 0' "$CTX_CACHE_FILE" 2>/dev/null | tr -d '\n\r')
+        cached_tokens=$(jq -r '.tokens // "0"' "$CTX_CACHE_FILE" 2>/dev/null | tr -d '\n\r')
+        CTX_COLOR=$(get_pct_color "${cached_pct:-0}" "$CONTEXT_COLOR")
+        CONTEXT_SEG="${GRAY}${ICON_CONTEXT}${RESET} ${CTX_COLOR}${cached_pct:-0}% · ${cached_tokens}${RESET}"
+    else
+        CONTEXT_SEG="${GRAY}${ICON_CONTEXT}${RESET} ${CONTEXT_COLOR}0%${RESET}"
+    fi
 fi
 
 # === API USAGE ===
@@ -246,7 +258,7 @@ if [ "${duration_ms:-0}" -gt 0 ] 2>/dev/null; then
 else
     time_display="0s"
 fi
-TIME_SEG="${GRAY}${ICON_TIME}${RESET} ${TIME_COLOR}${time_display}${RESET}"
+TIME_SEG="${TIME_COLOR}${time_display}${RESET}"
 
 # === OUTPUT (2 lines) ===
 LINE1="${MODEL_SEG}${SEP}${CONTEXT_SEG}${SEP}${USAGE_SEG}${SEP}${TIME_SEG}"
