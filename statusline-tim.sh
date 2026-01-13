@@ -6,18 +6,18 @@ exec 2>/dev/null
 
 input=$(cat)
 
-# Colors (256-color Atom One Dark theme)
+# Colors (256-color Catppuccin Mocha theme)
 RESET=$'\033[0m'
-MODEL_COLOR=$'\033[1;38;5;173m'     # #D97857 rust orange
-DIR_COLOR=$'\033[1;38;5;114m'       # #98C379 Atom green
-CONTEXT_COLOR=$'\033[1;38;5;111m'   # #61AFEF Atom blue
-GIT_COLOR=$'\033[1;38;5;180m'       # #D19A66 Atom orange
-USAGE_COLOR=$'\033[1;38;5;176m'     # #C678DD Atom magenta
-TIME_COLOR=$'\033[1;38;5;80m'       # #56B6C2 Atom cyan
-GRAY=$'\033[38;5;244m'              # Gray for labels
-GREEN=$'\033[1;38;5;114m'           # #98C379 Atom green
-YELLOW=$'\033[1;38;5;179m'          # #E5C07B Atom yellow
-RED=$'\033[1;38;5;167m'             # #E06C75 Atom red
+MODEL_COLOR=$'\033[1;38;5;216m'     # #fab387 Peach
+DIR_COLOR=$'\033[1;38;5;157m'       # #a6e3a1 Green
+CONTEXT_COLOR=$'\033[1;38;5;111m'   # #89b4fa Blue
+GIT_COLOR=$'\033[1;38;5;183m'       # #cba6f7 Mauve
+USAGE_COLOR=$'\033[1;38;5;183m'     # #cba6f7 Mauve
+TIME_COLOR=$'\033[1;38;5;117m'      # #89dceb Sky
+GRAY=$'\033[38;5;102m'              # #7f849c Overlay1
+GREEN=$'\033[1;38;5;157m'           # #a6e3a1 Green
+YELLOW=$'\033[1;38;5;223m'          # #f9e2af Yellow
+RED=$'\033[1;38;5;211m'             # #f38ba8 Red
 
 # Icons - korte afkortingen met :
 ICON_MODEL=""
@@ -63,8 +63,8 @@ SEP="${GRAY} | ${RESET}"
 model_display=$(echo "$input" | jq -r '.model.display_name // "Unknown"' | tr -d '\n\r')
 case "$model_display" in
     *"Opus"*) model_display="Opus 4.5" ;;
-    *"Sonnet"*) model_display="Sonnet 4" ;;
-    *"Haiku"*) model_display="Haiku" ;;
+    *"Sonnet"*) model_display="Sonnet 4.5" ;;
+    *"Haiku"*) model_display="Haiku 3.5" ;;
 esac
 MODEL_SEG="${MODEL_COLOR}${model_display}${RESET}"
 
@@ -85,9 +85,17 @@ DIR_SEG="${DIR_COLOR}${display_dir}${RESET}"
 # === GIT ===
 GIT_SEG=""
 COMMIT_SEG=""
+WORKTREE_SEG=""
 if [ -d "$current_dir" ] && git -C "$current_dir" rev-parse --git-dir >/dev/null 2>&1; then
     git_branch=$(git -C "$current_dir" branch --show-current 2>/dev/null || echo "detached")
     [ -z "$git_branch" ] && git_branch="detached"
+
+    # Worktree detection
+    git_dir=$(git -C "$current_dir" rev-parse --git-dir 2>/dev/null)
+    if [[ "$git_dir" == *"/worktrees/"* ]]; then
+        worktree_name=$(basename "$git_dir")
+        WORKTREE_SEG="${GRAY}wt ${YELLOW}${worktree_name}${RESET}"
+    fi
 
     git_status=$(git -C "$current_dir" status --porcelain 2>/dev/null)
     if [ -z "$git_status" ]; then
@@ -144,26 +152,17 @@ fi
 # === CONTEXT ===
 CTX_CACHE_FILE="$HOME/.claude/statusline_ctx_cache.json"
 
-context_size=$(echo "$input" | jq -r '.context_window.context_window_size // 200000' | tr -d '\n\r')
-input_tokens=$(echo "$input" | jq -r '.context_window.current_usage.input_tokens // 0' | tr -d '\n\r')
-output_tokens=$(echo "$input" | jq -r '.context_window.current_usage.output_tokens // 0' | tr -d '\n\r')
-cache_creation=$(echo "$input" | jq -r '.context_window.current_usage.cache_creation_input_tokens // 0' | tr -d '\n\r')
-cache_read=$(echo "$input" | jq -r '.context_window.current_usage.cache_read_input_tokens // 0' | tr -d '\n\r')
+# Use used_percentage from Claude Code v2.1.6+ (matches /context command)
+max_context=$(echo "$input" | jq -r '.context_window.context_window_size // 200000' | tr -d '\n\r')
+used_pct=$(echo "$input" | jq -r '.context_window.used_percentage // empty | floor' | tr -d '\n\r')
 
-total_tokens=$((input_tokens + output_tokens + cache_creation + cache_read))
-[ "$total_tokens" -eq 0 ] && total_tokens=$(echo "$input" | jq -r '.context_window.total_input_tokens // 0' | tr -d '\n\r')
-
-if [ "${context_size:-0}" -gt 0 ] 2>/dev/null && [ "${total_tokens:-0}" -gt 0 ] 2>/dev/null; then
-    pct_display=$(awk "BEGIN {printf \"%.0f\", ($total_tokens / $context_size) * 100}")
-    CTX_COLOR=$(get_pct_color "$pct_display" "$CONTEXT_COLOR")
-    if [ "$total_tokens" -ge 1000 ]; then
-        tokens_display=$(awk "BEGIN {printf \"%.1fk\", $total_tokens / 1000}")
-    else
-        tokens_display="$total_tokens"
-    fi
+if [ -n "$used_pct" ] && [ "$used_pct" != "null" ] && [ "$used_pct" != "" ]; then
+    used_tokens=$((max_context * used_pct / 100))
+    used_k=$((used_tokens / 1000))
+    CTX_COLOR=$(get_pct_color "$used_pct" "$CONTEXT_COLOR")
     # Cache valid context data
-    echo "{\"pct\": $pct_display, \"tokens\": \"$tokens_display\", \"cached_at\": $(date +%s)}" > "$CTX_CACHE_FILE" 2>/dev/null
-    CONTEXT_SEG="${GRAY}${ICON_CONTEXT}${RESET} ${CTX_COLOR}${pct_display}%${RESET} ${GRAY}· ${tokens_display}${RESET}"
+    echo "{\"pct\": $used_pct, \"tokens\": \"${used_k}k\", \"cached_at\": $(date +%s)}" > "$CTX_CACHE_FILE" 2>/dev/null
+    CONTEXT_SEG="${GRAY}${ICON_CONTEXT}${RESET} ${CTX_COLOR}${used_pct}%${RESET} ${GRAY}· ${used_k}k${RESET}"
 else
     # Try to use cached context data
     if [ -f "$CTX_CACHE_FILE" ]; then
@@ -272,6 +271,7 @@ TIME_SEG="${TIME_COLOR}${time_display}${RESET}"
 LINE1="${MODEL_SEG}${SEP}${CONTEXT_SEG}${SEP}${USAGE_SEG}${SEP}${TIME_SEG}"
 LINE2="${DIR_SEG}"
 [ -n "$GIT_SEG" ] && LINE2="${LINE2}${SEP}${GIT_SEG}"
+[ -n "$WORKTREE_SEG" ] && LINE2="${LINE2}${SEP}${WORKTREE_SEG}"
 [ -n "$COMMIT_SEG" ] && LINE2="${LINE2}${SEP}${COMMIT_SEG}"
 
 printf '%s\n%s\n' "$LINE1" "$LINE2"
