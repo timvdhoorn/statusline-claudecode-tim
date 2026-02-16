@@ -8,8 +8,8 @@ interface Props {
 }
 
 function formatModelName(name: string): string {
-  if (name.includes('Opus')) return 'Opus 4.5';
-  if (name.includes('Sonnet')) return 'Sonnet 4';
+  if (name.includes('Opus')) return 'Opus 4.6';
+  if (name.includes('Sonnet')) return 'Sonnet 4.5';
   if (name.includes('Haiku')) return 'Haiku';
   return name;
 }

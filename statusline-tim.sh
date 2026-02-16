@@ -6,18 +6,18 @@ exec 2>/dev/null
 
 input=$(cat)
 
-# Colors (256-color Catppuccin Mocha theme)
+# Colors (true-color Catppuccin Mocha theme)
+# Each color includes reset (0;) to atomically switch — prevents color bleed from Claude Code UI
 RESET=$'\033[0m'
-MODEL_COLOR=$'\033[1;38;5;216m'     # #fab387 Peach
-DIR_COLOR=$'\033[1;38;5;157m'       # #a6e3a1 Green
-CONTEXT_COLOR=$'\033[1;38;5;111m'   # #89b4fa Blue
-GIT_COLOR=$'\033[1;38;5;183m'       # #cba6f7 Mauve
-USAGE_COLOR=$'\033[1;38;5;183m'     # #cba6f7 Mauve
-TIME_COLOR=$'\033[1;38;5;117m'      # #89dceb Sky
-GRAY=$'\033[38;5;102m'              # #7f849c Overlay1
-GREEN=$'\033[1;38;5;157m'           # #a6e3a1 Green
-YELLOW=$'\033[1;38;5;223m'          # #f9e2af Yellow
-RED=$'\033[1;38;5;211m'             # #f38ba8 Red
+MODEL_COLOR=$'\033[0;1;38;2;250;179;135m'   # #fab387 Peach
+DIR_COLOR=$'\033[0;1;38;2;166;227;161m'     # #a6e3a1 Green
+CONTEXT_COLOR=$'\033[0;1;38;2;137;180;250m' # #89b4fa Blue
+GIT_COLOR=$'\033[0;1;38;2;203;166;247m'     # #cba6f7 Mauve
+USAGE_COLOR=$'\033[0;1;38;2;203;166;247m'   # #cba6f7 Mauve
+GRAY=$'\033[0;38;2;127;132;156m'            # #7f849c Overlay1
+GREEN=$'\033[0;1;38;2;166;227;161m'         # #a6e3a1 Green
+YELLOW=$'\033[0;1;38;2;249;226;175m'        # #f9e2af Yellow
+RED=$'\033[0;1;38;2;243;139;168m'           # #f38ba8 Red
 
 # Icons - korte afkortingen met :
 ICON_MODEL=""
@@ -57,16 +57,16 @@ get_usage_icon() {
     fi
 }
 
-SEP="${GRAY} | ${RESET}"
+SEP="${GRAY} | "
 
 # === MODEL ===
 model_display=$(echo "$input" | jq -r '.model.display_name // "Unknown"' | tr -d '\n\r')
 case "$model_display" in
-    *"Opus"*) model_display="Opus 4.5" ;;
+    *"Opus"*) model_display="Opus 4.6" ;;
     *"Sonnet"*) model_display="Sonnet 4.5" ;;
     *"Haiku"*) model_display="Haiku 3.5" ;;
 esac
-MODEL_SEG="${MODEL_COLOR}${model_display}${RESET}"
+MODEL_SEG="${MODEL_COLOR}${model_display}"
 
 # === DIRECTORY ===
 current_dir=$(echo "$input" | jq -r '.workspace.current_dir // "/"' | tr -d '\n\r')
@@ -80,7 +80,7 @@ num_parts=${#parts[@]}
 if [ "$num_parts" -gt 4 ]; then
     display_dir="~/…/${parts[$((num_parts-2))]}/${parts[$((num_parts-1))]}"
 fi
-DIR_SEG="${DIR_COLOR}${display_dir}${RESET}"
+DIR_SEG="${DIR_COLOR}${display_dir}"
 
 # === GIT ===
 GIT_SEG=""
@@ -94,7 +94,7 @@ if [ -d "$current_dir" ] && git -C "$current_dir" rev-parse --git-dir >/dev/null
     git_dir=$(git -C "$current_dir" rev-parse --git-dir 2>/dev/null)
     if [[ "$git_dir" == *"/worktrees/"* ]]; then
         worktree_name=$(basename "$git_dir")
-        WORKTREE_SEG="${GRAY}wt ${YELLOW}${worktree_name}${RESET}"
+        WORKTREE_SEG="${GRAY}wt ${YELLOW}${worktree_name}"
     fi
 
     git_status=$(git -C "$current_dir" status --porcelain 2>/dev/null)
@@ -119,7 +119,7 @@ if [ -d "$current_dir" ] && git -C "$current_dir" rev-parse --git-dir >/dev/null
         sync_icon=" ${ICON_DIVERGE}"
     fi
 
-    GIT_SEG="${GIT_COLOR}${git_branch} ${status_icon}${sync_icon}${git_extra}${RESET}"
+    GIT_SEG="${GIT_COLOR}${git_branch} ${status_icon}${sync_icon}${git_extra}"
 
     # Commit time
     last_commit_ts=$(git -C "$current_dir" log -1 --format=%ct 2>/dev/null)
@@ -135,7 +135,7 @@ if [ -d "$current_dir" ] && git -C "$current_dir" rev-parse --git-dir >/dev/null
         else
             commit_ago="$((diff_seconds / 86400))d"
         fi
-        COMMIT_SEG="${GRAY}${ICON_COMMIT} ${commit_ago}${RESET}"
+        COMMIT_SEG="${GRAY}${ICON_COMMIT} ${commit_ago}"
     fi
 fi
 
@@ -144,8 +144,8 @@ lines_added=$(echo "$input" | jq -r '.cost.total_lines_added // 0' | tr -d '\n\r
 lines_removed=$(echo "$input" | jq -r '.cost.total_lines_removed // 0' | tr -d '\n\r')
 if [ "${lines_added:-0}" -gt 0 ] 2>/dev/null || [ "${lines_removed:-0}" -gt 0 ] 2>/dev/null; then
     line_changes=""
-    [ "${lines_added:-0}" -gt 0 ] 2>/dev/null && line_changes="${line_changes} ${GREEN}+${lines_added}${RESET}"
-    [ "${lines_removed:-0}" -gt 0 ] 2>/dev/null && line_changes="${line_changes} ${RED}-${lines_removed}${RESET}"
+    [ "${lines_added:-0}" -gt 0 ] 2>/dev/null && line_changes="${line_changes} ${GREEN}+${lines_added}"
+    [ "${lines_removed:-0}" -gt 0 ] 2>/dev/null && line_changes="${line_changes} ${RED}-${lines_removed}"
     [ -n "$GIT_SEG" ] && GIT_SEG="${GIT_SEG}${line_changes}"
 fi
 
@@ -162,16 +162,16 @@ if [ -n "$used_pct" ] && [ "$used_pct" != "null" ] && [ "$used_pct" != "" ]; the
     CTX_COLOR=$(get_pct_color "$used_pct" "$CONTEXT_COLOR")
     # Cache valid context data
     echo "{\"pct\": $used_pct, \"tokens\": \"${used_k}k\", \"cached_at\": $(date +%s)}" > "$CTX_CACHE_FILE" 2>/dev/null
-    CONTEXT_SEG="${GRAY}${ICON_CONTEXT}${RESET} ${CTX_COLOR}${used_pct}%${RESET} ${GRAY}· ${used_k}k${RESET}"
+    CONTEXT_SEG="${GRAY}${ICON_CONTEXT} ${CTX_COLOR}${used_pct}% ${GRAY}· ${used_k}k"
 else
     # Try to use cached context data
     if [ -f "$CTX_CACHE_FILE" ]; then
         cached_pct=$(jq -r '.pct // 0' "$CTX_CACHE_FILE" 2>/dev/null | tr -d '\n\r')
         cached_tokens=$(jq -r '.tokens // "0"' "$CTX_CACHE_FILE" 2>/dev/null | tr -d '\n\r')
         CTX_COLOR=$(get_pct_color "${cached_pct:-0}" "$CONTEXT_COLOR")
-        CONTEXT_SEG="${GRAY}${ICON_CONTEXT}${RESET} ${CTX_COLOR}${cached_pct:-0}%${RESET} ${GRAY}· ${cached_tokens}${RESET}"
+        CONTEXT_SEG="${GRAY}${ICON_CONTEXT} ${CTX_COLOR}${cached_pct:-0}% ${GRAY}· ${cached_tokens}"
     else
-        CONTEXT_SEG="${GRAY}${ICON_CONTEXT}${RESET} ${CONTEXT_COLOR}0%${RESET}"
+        CONTEXT_SEG="${GRAY}${ICON_CONTEXT} ${CONTEXT_COLOR}0%"
     fi
 fi
 
@@ -249,29 +249,13 @@ if [ -n "$resets_at" ] && [ "$resets_at" != "null" ] && [ "$resets_at" != "" ]; 
 fi
 
 USG_COLOR=$(get_pct_color "${five_hour_int:-0}" "$USAGE_COLOR")
-USAGE_SEG="${GRAY}${ICON_USAGE}${RESET} ${USG_COLOR}${five_hour_int:-0}%${RESET} ${GRAY}· ${reset_formatted}${RESET}"
-
-# === SESSION TIME ===
-duration_ms=$(echo "$input" | jq -r '.cost.total_duration_ms // 0' | tr -d '\n\r')
-if [ "${duration_ms:-0}" -gt 0 ] 2>/dev/null; then
-    total_seconds=$((duration_ms / 1000))
-    if [ "$total_seconds" -ge 3600 ]; then
-        time_display="$((total_seconds / 3600))h$(((total_seconds % 3600) / 60))m"
-    elif [ "$total_seconds" -ge 60 ]; then
-        time_display="$((total_seconds / 60))m"
-    else
-        time_display="<1m"
-    fi
-else
-    time_display="0m"
-fi
-TIME_SEG="${TIME_COLOR}${time_display}${RESET}"
+USAGE_SEG="${GRAY}${ICON_USAGE} ${USG_COLOR}${five_hour_int:-0}% ${GRAY}· ${reset_formatted}"
 
 # === OUTPUT (2 lines) ===
-LINE1="${MODEL_SEG}${SEP}${CONTEXT_SEG}${SEP}${USAGE_SEG}${SEP}${TIME_SEG}"
+LINE1="${MODEL_SEG}${SEP}${CONTEXT_SEG}${SEP}${USAGE_SEG}"
 LINE2="${DIR_SEG}"
 [ -n "$GIT_SEG" ] && LINE2="${LINE2}${SEP}${GIT_SEG}"
 [ -n "$WORKTREE_SEG" ] && LINE2="${LINE2}${SEP}${WORKTREE_SEG}"
 [ -n "$COMMIT_SEG" ] && LINE2="${LINE2}${SEP}${COMMIT_SEG}"
 
-printf '%s\n%s\n' "$LINE1" "$LINE2"
+printf '%s\n%s%s\n' "$LINE1" "$LINE2" "$RESET"
