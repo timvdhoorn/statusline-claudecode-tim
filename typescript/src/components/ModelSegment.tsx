@@ -9,8 +9,8 @@ interface Props {
 
 function formatModelName(name: string): string {
   if (name.includes('Opus')) return 'Opus 4.6';
-  if (name.includes('Sonnet')) return 'Sonnet 4.5';
-  if (name.includes('Haiku')) return 'Haiku';
+  if (name.includes('Sonnet')) return 'Sonnet 4.6';
+  if (name.includes('Haiku')) return 'Haiku 4.5';
   return name;
 }
 

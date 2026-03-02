@@ -63,8 +63,8 @@ SEP="${GRAY} | "
 model_display=$(echo "$input" | jq -r '.model.display_name // "Unknown"' | tr -d '\n\r')
 case "$model_display" in
     *"Opus"*) model_display="Opus 4.6" ;;
-    *"Sonnet"*) model_display="Sonnet 4.5" ;;
-    *"Haiku"*) model_display="Haiku 3.5" ;;
+    *"Sonnet"*) model_display="Sonnet 4.6" ;;
+    *"Haiku"*) model_display="Haiku 4.5" ;;
 esac
 MODEL_SEG="${MODEL_COLOR}${model_display}"
 
