@@ -8,6 +8,7 @@ export interface StatuslineInput {
   };
   context_window: {
     context_window_size: number;
+    used_percentage?: number;
     current_usage?: {
       input_tokens: number;
       output_tokens: number;

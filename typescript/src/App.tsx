@@ -23,7 +23,7 @@ export function App({ input, gitInfo, usage }: Props) {
     <Box flexDirection="column">
       {/* Line 1: Model | Context | Usage | Time */}
       <Box>
-        <ModelSegment displayName={input.model.display_name} />
+        <ModelSegment displayName={input.model.display_name} contextWindowSize={input.context_window.context_window_size} />
         <Separator />
         <ContextSegment contextWindow={input.context_window} />
         <Separator />

@@ -6,7 +6,8 @@
     "current_dir": "/Users/timvdhoorn/Documents/10-Projects/Github/Claude/statusline-claudecode-tim"
   },
   "context_window": {
-    "context_window_size": 200000,
+    "context_window_size": 1000000,
+    "used_percentage": 6.5,
     "current_usage": {
       "input_tokens": 45000,
       "output_tokens": 12000,

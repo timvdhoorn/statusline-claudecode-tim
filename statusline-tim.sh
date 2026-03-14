@@ -61,10 +61,14 @@ SEP="${GRAY} | "
 
 # === MODEL ===
 model_display=$(echo "$input" | jq -r '.model.display_name // "Unknown"' | tr -d '\n\r')
+ctx_size=$(echo "$input" | jq -r '.context_window.context_window_size // 200000' | tr -d '\n\r')
+is_1m=""
+{ echo "$model_display" | grep -qi "1m"; } && is_1m="1"
+[ "$ctx_size" -gt 200000 ] 2>/dev/null && is_1m="1"
 case "$model_display" in
-    *"Opus"*) model_display="Opus 4.6" ;;
-    *"Sonnet"*) model_display="Sonnet 4.6" ;;
-    *"Haiku"*) model_display="Haiku 4.5" ;;
+    *"Opus"*)   [ -n "$is_1m" ] && model_display="Opus 4.6 1M" || model_display="Opus 4.6" ;;
+    *"Sonnet"*) [ -n "$is_1m" ] && model_display="Sonnet 4.6 1M" || model_display="Sonnet 4.6" ;;
+    *"Haiku"*)  model_display="Haiku 4.5" ;;
 esac
 MODEL_SEG="${MODEL_COLOR}${model_display}"
 
@@ -153,11 +157,11 @@ fi
 CTX_CACHE_FILE="$HOME/.claude/statusline_ctx_cache.json"
 
 # Use used_percentage from Claude Code v2.1.6+ (matches /context command)
-max_context=$(echo "$input" | jq -r '.context_window.context_window_size // 200000' | tr -d '\n\r')
+# ctx_size already read in MODEL section
 used_pct=$(echo "$input" | jq -r '.context_window.used_percentage // empty | floor' | tr -d '\n\r')
 
 if [ -n "$used_pct" ] && [ "$used_pct" != "null" ] && [ "$used_pct" != "" ]; then
-    used_tokens=$((max_context * used_pct / 100))
+    used_tokens=$((ctx_size * used_pct / 100))
     used_k=$((used_tokens / 1000))
     CTX_COLOR=$(get_pct_color "$used_pct" "$CONTEXT_COLOR")
     # Cache valid context data
