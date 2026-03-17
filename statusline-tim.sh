@@ -61,7 +61,7 @@ SEP="${GRAY} | "
 
 # === MODEL ===
 model_display=$(echo "$input" | jq -r '.model.display_name // "Unknown"' | tr -d '\n\r')
-ctx_size=$(echo "$input" | jq -r '.context_window.context_window_size // 200000' | tr -d '\n\r')
+ctx_size=$(echo "$input" | jq -r '.context_window.context_window_size // 1000000' | tr -d '\n\r')
 is_1m=""
 { echo "$model_display" | grep -qi "1m"; } && is_1m="1"
 [ "$ctx_size" -gt 200000 ] 2>/dev/null && is_1m="1"
@@ -182,24 +182,33 @@ fi
 # === API USAGE ===
 CACHE_FILE="$HOME/.claude/statusline_usage_cache.json"
 
+USAGE_CACHE_TTL=300  # 5 minutes — API has aggressive rate limits (~5 req/token)
+
 get_cached_usage() {
     if [ -f "$CACHE_FILE" ]; then
         local cached_at=$(jq -r '.cached_at // 0' "$CACHE_FILE" 2>/dev/null | tr -d '\n\r')
         local now=$(date +%s)
         local age=$((now - cached_at))
-        # Always return cached data if available
         local data=$(jq -r '"\(.five_hour // 0)|\(.resets_at // "")"' "$CACHE_FILE" 2>/dev/null | tr -d '\n\r')
         if [ -n "$data" ] && [ "$data" != "|" ]; then
             echo "$data"
-            # Return 0 if fresh, 1 if stale (needs refresh)
-            [ "$age" -lt 60 ] && return 0 || return 1
+            [ "$age" -lt "$USAGE_CACHE_TTL" ] && return 0 || return 1
         fi
     fi
     return 2  # No cache at all
 }
 
 fetch_usage_background() {
+    # Prevent concurrent fetches with a lock file
+    local LOCK_FILE="$HOME/.claude/statusline_usage.lock"
+    if [ -f "$LOCK_FILE" ]; then
+        local lock_age=$(( $(date +%s) - $(stat -f %m "$LOCK_FILE" 2>/dev/null || echo 0) ))
+        [ "$lock_age" -lt 30 ] && return 0  # Another fetch is running
+    fi
     (
+        touch "$LOCK_FILE"
+        trap 'rm -f "$LOCK_FILE"' EXIT
+
         local token=""
         local keychain_data=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
         if [ -n "$keychain_data" ]; then
@@ -210,10 +219,23 @@ fetch_usage_background() {
         fi
         [ -z "$token" ] && exit 0
 
-        local response=$(curl -s --max-time 2 \
+        local http_code response
+        response=$(curl -s --max-time 5 -w "\n%{http_code}" \
             -H "Authorization: Bearer $token" \
             -H "anthropic-beta: oauth-2025-04-20" \
             "https://api.anthropic.com/api/oauth/usage" 2>/dev/null)
+
+        http_code=$(echo "$response" | tail -1)
+        response=$(echo "$response" | sed '$d')
+
+        if [ "$http_code" = "429" ]; then
+            # Rate limited — extend cache TTL by touching cached_at
+            if [ -f "$CACHE_FILE" ]; then
+                local existing=$(cat "$CACHE_FILE")
+                echo "$existing" | jq --arg ts "$(date +%s)" '.cached_at = ($ts | tonumber)' > "$CACHE_FILE" 2>/dev/null
+            fi
+            exit 0
+        fi
 
         if [ -n "$response" ] && echo "$response" | jq -e '.five_hour' >/dev/null 2>&1; then
             local five_hour=$(echo "$response" | jq -r '.five_hour.utilization // 0' | tr -d '\n\r')
