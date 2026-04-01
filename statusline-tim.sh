@@ -56,7 +56,7 @@ get_usage_icon() {
 SEP="${GRAY} | "
 
 # === MODEL ===
-model_display=$(echo "$input" | jq -r '.model.display_name // "Unknown"' | tr -d '\n\r')
+model_display=$(echo "$input" | jq -r '.model.display_name // "Unknown"' | sed 's/ *(.*1M.*)/ 1M/' | tr -d '\n\r')
 cc_version=$(echo "$input" | jq -r '.version // empty' | tr -d '\n\r')
 VERSION_SEG=""
 [ -n "$cc_version" ] && VERSION_SEG=" ${GRAY}v${cc_version}${RESET}"
