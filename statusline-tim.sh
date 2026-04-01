@@ -19,12 +19,8 @@ GREEN=$'\033[0;1;38;2;166;227;161m'         # #a6e3a1 Green
 YELLOW=$'\033[0;1;38;2;249;226;175m'        # #f9e2af Yellow
 RED=$'\033[0;1;38;2;243;139;168m'           # #f38ba8 Red
 
-# Icons - korte afkortingen met :
-ICON_MODEL=""
-ICON_FOLDER=""
-ICON_GIT=""
+# Icons
 ICON_CONTEXT="ctx"
-ICON_TIME=""
 ICON_USAGE="5h"
 ICON_COMMIT="cmt"
 ICON_SYNC="ok"
@@ -63,7 +59,7 @@ SEP="${GRAY} | "
 model_display=$(echo "$input" | jq -r '.model.display_name // "Unknown"' | tr -d '\n\r')
 cc_version=$(echo "$input" | jq -r '.version // empty' | tr -d '\n\r')
 VERSION_SEG=""
-[ -n "$cc_version" ] && VERSION_SEG=" ${GRAY}v${cc_version}"
+[ -n "$cc_version" ] && VERSION_SEG=" ${GRAY}v${cc_version}${RESET}"
 MODEL_SEG="${MODEL_COLOR}${model_display}${VERSION_SEG}"
 
 # === DIRECTORY ===
@@ -160,13 +156,12 @@ if [ -n "$used_pct" ] && [ "$used_pct" != "null" ]; then
 fi
 
 # === API USAGE ===
-five_hour_pct=$(echo "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty' | tr -d '\n\r')
+five_hour_pct=$(echo "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty | floor' | tr -d '\n\r')
 resets_at_epoch=$(echo "$input" | jq -r '.rate_limits.five_hour.resets_at // empty' | tr -d '\n\r')
 
 USAGE_SEG=""
 if [ -n "$five_hour_pct" ] && [ "$five_hour_pct" != "null" ]; then
-    five_hour_int=$(awk "BEGIN {printf \"%.0f\", $five_hour_pct}" 2>/dev/null || echo "0")
-    usage_icon=$(get_usage_icon "$five_hour_int")
+    usage_icon=$(get_usage_icon "$five_hour_pct")
 
     reset_formatted="?"
     if [ -n "$resets_at_epoch" ] && [ "$resets_at_epoch" != "null" ]; then
@@ -182,8 +177,8 @@ if [ -n "$five_hour_pct" ] && [ "$five_hour_pct" != "null" ]; then
         fi
     fi
 
-    USG_COLOR=$(get_pct_color "${five_hour_int:-0}" "$USAGE_COLOR")
-    USAGE_SEG="${GRAY}${usage_icon} ${USG_COLOR}${five_hour_int}% ${GRAY}· ${reset_formatted}"
+    USG_COLOR=$(get_pct_color "${five_hour_pct:-0}" "$USAGE_COLOR")
+    USAGE_SEG="${GRAY}${usage_icon} ${USG_COLOR}${five_hour_pct}% ${GRAY}· ${reset_formatted}"
 fi
 
 # === OUTPUT (2 lines) ===
@@ -202,7 +197,7 @@ if [ "${duration_ms:-0}" -gt 0 ] 2>/dev/null; then
     else
         duration_fmt="$((total_sec / 3600))h$((total_sec % 3600 / 60))m"
     fi
-    LINE1="${LINE1}${SEP}${GRAY}${ICON_TIME} ${duration_fmt}"
+    LINE1="${LINE1}${SEP}${GRAY}${duration_fmt}"
 fi
 
 LINE2="${DIR_SEG}"
