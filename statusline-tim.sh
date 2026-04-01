@@ -61,16 +61,10 @@ SEP="${GRAY} | "
 
 # === MODEL ===
 model_display=$(echo "$input" | jq -r '.model.display_name // "Unknown"' | tr -d '\n\r')
-ctx_size=$(echo "$input" | jq -r '.context_window.context_window_size // 1000000' | tr -d '\n\r')
-is_1m=""
-{ echo "$model_display" | grep -qi "1m"; } && is_1m="1"
-[ "$ctx_size" -gt 200000 ] 2>/dev/null && is_1m="1"
-case "$model_display" in
-    *"Opus"*)   [ -n "$is_1m" ] && model_display="Opus 4.6 1M" || model_display="Opus 4.6" ;;
-    *"Sonnet"*) [ -n "$is_1m" ] && model_display="Sonnet 4.6 1M" || model_display="Sonnet 4.6" ;;
-    *"Haiku"*)  model_display="Haiku 4.5" ;;
-esac
-MODEL_SEG="${MODEL_COLOR}${model_display}"
+cc_version=$(echo "$input" | jq -r '.version // empty' | tr -d '\n\r')
+VERSION_SEG=""
+[ -n "$cc_version" ] && VERSION_SEG=" ${GRAY}v${cc_version}"
+MODEL_SEG="${MODEL_COLOR}${model_display}${VERSION_SEG}"
 
 # === DIRECTORY ===
 current_dir=$(echo "$input" | jq -r '.workspace.current_dir // "/"' | tr -d '\n\r')
@@ -154,131 +148,63 @@ if [ "${lines_added:-0}" -gt 0 ] 2>/dev/null || [ "${lines_removed:-0}" -gt 0 ] 
 fi
 
 # === CONTEXT ===
-CTX_CACHE_FILE="$HOME/.claude/statusline_ctx_cache.json"
-
-# Use used_percentage from Claude Code v2.1.6+ (matches /context command)
-# ctx_size already read in MODEL section
 used_pct=$(echo "$input" | jq -r '.context_window.used_percentage // empty | floor' | tr -d '\n\r')
 
-if [ -n "$used_pct" ] && [ "$used_pct" != "null" ] && [ "$used_pct" != "" ]; then
+CONTEXT_SEG=""
+if [ -n "$used_pct" ] && [ "$used_pct" != "null" ]; then
+    ctx_size=$(echo "$input" | jq -r '.context_window.context_window_size // 1000000' | tr -d '\n\r')
     used_tokens=$((ctx_size * used_pct / 100))
     used_k=$((used_tokens / 1000))
     CTX_COLOR=$(get_pct_color "$used_pct" "$CONTEXT_COLOR")
-    # Cache valid context data
-    echo "{\"pct\": $used_pct, \"tokens\": \"${used_k}k\", \"cached_at\": $(date +%s)}" > "$CTX_CACHE_FILE" 2>/dev/null
     CONTEXT_SEG="${GRAY}${ICON_CONTEXT} ${CTX_COLOR}${used_pct}% ${GRAY}· ${used_k}k"
-else
-    # Try to use cached context data
-    if [ -f "$CTX_CACHE_FILE" ]; then
-        cached_pct=$(jq -r '.pct // 0' "$CTX_CACHE_FILE" 2>/dev/null | tr -d '\n\r')
-        cached_tokens=$(jq -r '.tokens // "0"' "$CTX_CACHE_FILE" 2>/dev/null | tr -d '\n\r')
-        CTX_COLOR=$(get_pct_color "${cached_pct:-0}" "$CONTEXT_COLOR")
-        CONTEXT_SEG="${GRAY}${ICON_CONTEXT} ${CTX_COLOR}${cached_pct:-0}% ${GRAY}· ${cached_tokens}"
-    else
-        CONTEXT_SEG="${GRAY}${ICON_CONTEXT} ${CONTEXT_COLOR}0%"
-    fi
 fi
 
 # === API USAGE ===
-CACHE_FILE="$HOME/.claude/statusline_usage_cache.json"
+five_hour_pct=$(echo "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty' | tr -d '\n\r')
+resets_at_epoch=$(echo "$input" | jq -r '.rate_limits.five_hour.resets_at // empty' | tr -d '\n\r')
 
-USAGE_CACHE_TTL=300  # 5 minutes — API has aggressive rate limits (~5 req/token)
+USAGE_SEG=""
+if [ -n "$five_hour_pct" ] && [ "$five_hour_pct" != "null" ]; then
+    five_hour_int=$(awk "BEGIN {printf \"%.0f\", $five_hour_pct}" 2>/dev/null || echo "0")
+    usage_icon=$(get_usage_icon "$five_hour_int")
 
-get_cached_usage() {
-    if [ -f "$CACHE_FILE" ]; then
-        local cached_at=$(jq -r '.cached_at // 0' "$CACHE_FILE" 2>/dev/null | tr -d '\n\r')
-        local now=$(date +%s)
-        local age=$((now - cached_at))
-        local data=$(jq -r '"\(.five_hour // 0)|\(.resets_at // "")"' "$CACHE_FILE" 2>/dev/null | tr -d '\n\r')
-        if [ -n "$data" ] && [ "$data" != "|" ]; then
-            echo "$data"
-            [ "$age" -lt "$USAGE_CACHE_TTL" ] && return 0 || return 1
-        fi
-    fi
-    return 2  # No cache at all
-}
-
-fetch_usage_background() {
-    # Prevent concurrent fetches with a lock file
-    local LOCK_FILE="$HOME/.claude/statusline_usage.lock"
-    if [ -f "$LOCK_FILE" ]; then
-        local lock_age=$(( $(date +%s) - $(stat -f %m "$LOCK_FILE" 2>/dev/null || echo 0) ))
-        [ "$lock_age" -lt 30 ] && return 0  # Another fetch is running
-    fi
-    (
-        touch "$LOCK_FILE"
-        trap 'rm -f "$LOCK_FILE"' EXIT
-
-        local token=""
-        local keychain_data=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
-        if [ -n "$keychain_data" ]; then
-            token=$(echo "$keychain_data" | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null | tr -d '\n\r')
-        fi
-        if [ -z "$token" ] && [ -f "$HOME/.claude/.credentials.json" ]; then
-            token=$(jq -r '.claudeAiOauth.accessToken // empty' "$HOME/.claude/.credentials.json" 2>/dev/null | tr -d '\n\r')
-        fi
-        [ -z "$token" ] && exit 0
-
-        local http_code response
-        response=$(curl -s --max-time 5 -w "\n%{http_code}" \
-            -H "Authorization: Bearer $token" \
-            -H "anthropic-beta: oauth-2025-04-20" \
-            "https://api.anthropic.com/api/oauth/usage" 2>/dev/null)
-
-        http_code=$(echo "$response" | tail -1)
-        response=$(echo "$response" | sed '$d')
-
-        if [ "$http_code" = "429" ]; then
-            # Rate limited — extend cache TTL by touching cached_at
-            if [ -f "$CACHE_FILE" ]; then
-                local existing=$(cat "$CACHE_FILE")
-                echo "$existing" | jq --arg ts "$(date +%s)" '.cached_at = ($ts | tonumber)' > "$CACHE_FILE" 2>/dev/null
+    reset_formatted="?"
+    if [ -n "$resets_at_epoch" ] && [ "$resets_at_epoch" != "null" ]; then
+        resets_at_int=$(awk "BEGIN {printf \"%.0f\", $resets_at_epoch}" 2>/dev/null)
+        if [ -n "$resets_at_int" ]; then
+            today=$(date "+%Y-%m-%d")
+            reset_day=$(date -j -f "%s" "$resets_at_int" "+%Y-%m-%d" 2>/dev/null)
+            if [ "$today" = "$reset_day" ]; then
+                reset_formatted=$(date -j -f "%s" "$resets_at_int" "+%H:%M" 2>/dev/null || echo "?")
+            else
+                reset_formatted=$(date -j -f "%s" "$resets_at_int" "+%d-%m %H:%M" 2>/dev/null || echo "?")
             fi
-            exit 0
-        fi
-
-        if [ -n "$response" ] && echo "$response" | jq -e '.five_hour' >/dev/null 2>&1; then
-            local five_hour=$(echo "$response" | jq -r '.five_hour.utilization // 0' | tr -d '\n\r')
-            local resets_at=$(echo "$response" | jq -r '.five_hour.resets_at // ""' | tr -d '\n\r')
-            echo "{\"five_hour\": $five_hour, \"resets_at\": \"$resets_at\", \"cached_at\": $(date +%s)}" > "$CACHE_FILE"
-        fi
-    ) >/dev/null 2>&1 &
-}
-
-usage_data=$(get_cached_usage)
-cache_status=$?
-# 0=fresh, 1=stale (refresh in background), 2=no cache
-if [ "$cache_status" -eq 1 ]; then
-    fetch_usage_background
-elif [ "$cache_status" -eq 2 ]; then
-    fetch_usage_background
-    usage_data="0|"
-fi
-
-five_hour_pct=$(echo "$usage_data" | cut -d'|' -f1)
-resets_at=$(echo "$usage_data" | cut -d'|' -f2)
-five_hour_int=$(awk "BEGIN {printf \"%.0f\", ${five_hour_pct:-0}}" 2>/dev/null || echo "0")
-
-reset_formatted="?"
-if [ -n "$resets_at" ] && [ "$resets_at" != "null" ] && [ "$resets_at" != "" ]; then
-    clean_date="${resets_at%%.*}"
-    unix_ts=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%S" "$clean_date" "+%s" 2>/dev/null)
-    if [ -n "$unix_ts" ]; then
-        today=$(date "+%Y-%m-%d")
-        reset_day=$(date -j -f "%s" "$unix_ts" "+%Y-%m-%d" 2>/dev/null)
-        if [ "$today" = "$reset_day" ]; then
-            reset_formatted=$(date -j -f "%s" "$unix_ts" "+%H:%M" 2>/dev/null || echo "?")
-        else
-            reset_formatted=$(date -j -f "%s" "$unix_ts" "+%d-%m %H:%M" 2>/dev/null || echo "?")
         fi
     fi
-fi
 
-USG_COLOR=$(get_pct_color "${five_hour_int:-0}" "$USAGE_COLOR")
-USAGE_SEG="${GRAY}${ICON_USAGE} ${USG_COLOR}${five_hour_int:-0}% ${GRAY}· ${reset_formatted}"
+    USG_COLOR=$(get_pct_color "${five_hour_int:-0}" "$USAGE_COLOR")
+    USAGE_SEG="${GRAY}${usage_icon} ${USG_COLOR}${five_hour_int}% ${GRAY}· ${reset_formatted}"
+fi
 
 # === OUTPUT (2 lines) ===
-LINE1="${MODEL_SEG}${SEP}${CONTEXT_SEG}${SEP}${USAGE_SEG}"
+LINE1="${MODEL_SEG}"
+[ -n "$CONTEXT_SEG" ] && LINE1="${LINE1}${SEP}${CONTEXT_SEG}"
+[ -n "$USAGE_SEG" ] && LINE1="${LINE1}${SEP}${USAGE_SEG}"
+
+# Duration
+duration_ms=$(echo "$input" | jq -r '.cost.total_duration_ms // 0' | tr -d '\n\r')
+if [ "${duration_ms:-0}" -gt 0 ] 2>/dev/null; then
+    total_sec=$((duration_ms / 1000))
+    if [ "$total_sec" -lt 60 ]; then
+        duration_fmt="${total_sec}s"
+    elif [ "$total_sec" -lt 3600 ]; then
+        duration_fmt="$((total_sec / 60))m"
+    else
+        duration_fmt="$((total_sec / 3600))h$((total_sec % 3600 / 60))m"
+    fi
+    LINE1="${LINE1}${SEP}${GRAY}${ICON_TIME} ${duration_fmt}"
+fi
+
 LINE2="${DIR_SEG}"
 [ -n "$GIT_SEG" ] && LINE2="${LINE2}${SEP}${GIT_SEG}"
 [ -n "$WORKTREE_SEG" ] && LINE2="${LINE2}${SEP}${WORKTREE_SEG}"
