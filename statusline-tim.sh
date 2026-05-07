@@ -84,6 +84,8 @@ if [ -n "$effort_level" ]; then
         low)    effort_color="$GRAY" ;;
         medium) effort_color="$YELLOW" ;;
         high)   effort_color="$RED" ;;
+        xhigh)  effort_color=$'\033[0;1;38;2;245;194;231m' ;;  # #f5c2e7 Pink
+        max)    effort_color=$'\033[0;1;38;2;203;166;247m' ;;  # #cba6f7 Mauve (most intense)
         *)      effort_color="$GRAY" ;;
     esac
     thinking_mark=""
