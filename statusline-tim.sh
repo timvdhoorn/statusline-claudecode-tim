@@ -35,22 +35,8 @@ get_pct_color() {
     fi
 }
 
-# Dynamic circle icon for usage (iTerm only)
 get_usage_icon() {
-    local pct=$1
-    if [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
-        if [ "$pct" -le 12 ]; then echo "󰪞"
-        elif [ "$pct" -le 25 ]; then echo "󰪟"
-        elif [ "$pct" -le 37 ]; then echo "󰪠"
-        elif [ "$pct" -le 50 ]; then echo "󰪡"
-        elif [ "$pct" -le 62 ]; then echo "󰪢"
-        elif [ "$pct" -le 75 ]; then echo "󰪣"
-        elif [ "$pct" -le 87 ]; then echo "󰪤"
-        else echo "󰪥"
-        fi
-    else
-        echo "$ICON_USAGE"
-    fi
+    echo "$ICON_USAGE"
 }
 
 SEP="${GRAY} | "
