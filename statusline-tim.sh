@@ -55,15 +55,40 @@ get_usage_icon() {
 
 SEP="${GRAY} | "
 
+# === DIRECTORY (resolved early so MODEL can read project settings) ===
+current_dir=$(echo "$input" | jq -r '.workspace.current_dir // "/"' | tr -d '\n\r')
+
 # === MODEL ===
 model_display=$(echo "$input" | jq -r '.model.display_name // "Unknown"' | sed 's/ *(.*1M.*)/ 1M/' | tr -d '\n\r')
 cc_version=$(echo "$input" | jq -r '.version // empty' | tr -d '\n\r')
 VERSION_SEG=""
 [ -n "$cc_version" ] && VERSION_SEG=" ${GRAY}v${cc_version}${RESET}"
-MODEL_SEG="${MODEL_COLOR}${model_display}${VERSION_SEG}"
 
-# === DIRECTORY ===
-current_dir=$(echo "$input" | jq -r '.workspace.current_dir // "/"' | tr -d '\n\r')
+# Effort level from settings.json (project local → user global)
+effort_level=""
+for settings_file in "$current_dir/.claude/settings.local.json" "$current_dir/.claude/settings.json" "$HOME/.claude/settings.json"; do
+    if [ -f "$settings_file" ]; then
+        val=$(jq -r '.effortLevel // empty' "$settings_file" 2>/dev/null | tr -d '\n\r')
+        if [ -n "$val" ]; then
+            effort_level="$val"
+            break
+        fi
+    fi
+done
+EFFORT_SEG=""
+if [ -n "$effort_level" ]; then
+    case "$effort_level" in
+        low)    effort_color="$GRAY" ;;
+        medium) effort_color="$YELLOW" ;;
+        high)   effort_color="$RED" ;;
+        *)      effort_color="$GRAY" ;;
+    esac
+    EFFORT_SEG=" ${GRAY}(${effort_color}${effort_level}${GRAY})${RESET}"
+fi
+
+MODEL_SEG="${MODEL_COLOR}${model_display}${EFFORT_SEG}${VERSION_SEG}"
+
+# === DIRECTORY display ===
 if [[ "$current_dir" == "$HOME"* ]]; then
     display_dir="~${current_dir#$HOME}"
 else
