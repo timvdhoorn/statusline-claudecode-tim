@@ -63,7 +63,6 @@ if [ -z "$effort_level" ]; then
         fi
     done
 fi
-thinking_on=$(echo "$input" | jq -r '.thinking.enabled // false' | tr -d '\n\r')
 EFFORT_SEG=""
 if [ -n "$effort_level" ]; then
     case "$effort_level" in
@@ -74,9 +73,7 @@ if [ -n "$effort_level" ]; then
         max)    effort_color=$'\033[0;1;38;2;203;166;247m' ;;  # #cba6f7 Mauve (most intense)
         *)      effort_color="$GRAY" ;;
     esac
-    thinking_mark=""
-    [ "$thinking_on" = "true" ] && thinking_mark="*"
-    EFFORT_SEG=" ${GRAY}(${effort_color}${effort_level}${thinking_mark}${GRAY})${RESET}"
+    EFFORT_SEG=" ${GRAY}(${effort_color}${effort_level}${GRAY})${RESET}"
 fi
 
 MODEL_SEG="${MODEL_COLOR}${model_display}${EFFORT_SEG}${VERSION_SEG}"
