@@ -64,17 +64,20 @@ cc_version=$(echo "$input" | jq -r '.version // empty' | tr -d '\n\r')
 VERSION_SEG=""
 [ -n "$cc_version" ] && VERSION_SEG=" ${GRAY}v${cc_version}${RESET}"
 
-# Effort level from settings.json (project local → user global)
-effort_level=""
-for settings_file in "$current_dir/.claude/settings.local.json" "$current_dir/.claude/settings.json" "$HOME/.claude/settings.json"; do
-    if [ -f "$settings_file" ]; then
-        val=$(jq -r '.effortLevel // empty' "$settings_file" 2>/dev/null | tr -d '\n\r')
-        if [ -n "$val" ]; then
-            effort_level="$val"
-            break
+# Effort level: prefer per-session stdin (.effort.level), fall back to settings.json
+effort_level=$(echo "$input" | jq -r '.effort.level // empty' | tr -d '\n\r')
+if [ -z "$effort_level" ]; then
+    for settings_file in "$current_dir/.claude/settings.local.json" "$current_dir/.claude/settings.json" "$HOME/.claude/settings.json"; do
+        if [ -f "$settings_file" ]; then
+            val=$(jq -r '.effortLevel // empty' "$settings_file" 2>/dev/null | tr -d '\n\r')
+            if [ -n "$val" ]; then
+                effort_level="$val"
+                break
+            fi
         fi
-    fi
-done
+    done
+fi
+thinking_on=$(echo "$input" | jq -r '.thinking.enabled // false' | tr -d '\n\r')
 EFFORT_SEG=""
 if [ -n "$effort_level" ]; then
     case "$effort_level" in
@@ -83,7 +86,9 @@ if [ -n "$effort_level" ]; then
         high)   effort_color="$RED" ;;
         *)      effort_color="$GRAY" ;;
     esac
-    EFFORT_SEG=" ${GRAY}(${effort_color}${effort_level}${GRAY})${RESET}"
+    thinking_mark=""
+    [ "$thinking_on" = "true" ] && thinking_mark="*"
+    EFFORT_SEG=" ${GRAY}(${effort_color}${effort_level}${thinking_mark}${GRAY})${RESET}"
 fi
 
 MODEL_SEG="${MODEL_COLOR}${model_display}${EFFORT_SEG}${VERSION_SEG}"
