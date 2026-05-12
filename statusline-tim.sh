@@ -22,6 +22,7 @@ RED=$'\033[0;1;38;2;243;139;168m'           # #f38ba8 Red
 # Icons
 ICON_CONTEXT="ctx"
 ICON_USAGE="5h"
+ICON_WEEK="wk"
 ICON_COMMIT="cmt"
 ICON_SYNC="ok"
 ICON_DIVERGE="!!"
@@ -196,24 +197,35 @@ if [ -n "$five_hour_pct" ] && [ "$five_hour_pct" != "null" ]; then
     USAGE_SEG="${GRAY}${usage_icon} ${USG_COLOR}${five_hour_pct}% ${GRAY}· ${reset_formatted}"
 fi
 
+# === WEEKLY USAGE ===
+week_pct=$(echo "$input" | jq -r '.rate_limits.seven_day.used_percentage // .rate_limits.weekly.used_percentage // empty | floor' | tr -d '\n\r')
+week_resets_at=$(echo "$input" | jq -r '.rate_limits.seven_day.resets_at // .rate_limits.weekly.resets_at // empty' | tr -d '\n\r')
+
+WEEK_SEG=""
+if [ -n "$week_pct" ] && [ "$week_pct" != "null" ]; then
+    week_reset_formatted="?"
+    if [ -n "$week_resets_at" ] && [ "$week_resets_at" != "null" ]; then
+        week_resets_int=$(awk "BEGIN {printf \"%.0f\", $week_resets_at}" 2>/dev/null)
+        if [ -n "$week_resets_int" ]; then
+            today=$(date "+%Y-%m-%d")
+            week_reset_day=$(date -j -f "%s" "$week_resets_int" "+%Y-%m-%d" 2>/dev/null)
+            if [ "$today" = "$week_reset_day" ]; then
+                week_reset_formatted=$(date -j -f "%s" "$week_resets_int" "+%H:%M" 2>/dev/null || echo "?")
+            else
+                week_reset_formatted=$(date -j -f "%s" "$week_resets_int" "+%d-%m %H:%M" 2>/dev/null || echo "?")
+            fi
+        fi
+    fi
+
+    WK_COLOR=$(get_pct_color "${week_pct:-0}" "$USAGE_COLOR")
+    WEEK_SEG="${GRAY}${ICON_WEEK} ${WK_COLOR}${week_pct}% ${GRAY}· ${week_reset_formatted}"
+fi
+
 # === OUTPUT (2 lines) ===
 LINE1="${MODEL_SEG}"
 [ -n "$CONTEXT_SEG" ] && LINE1="${LINE1}${SEP}${CONTEXT_SEG}"
 [ -n "$USAGE_SEG" ] && LINE1="${LINE1}${SEP}${USAGE_SEG}"
-
-# Duration
-duration_ms=$(echo "$input" | jq -r '.cost.total_duration_ms // 0' | tr -d '\n\r')
-if [ "${duration_ms:-0}" -gt 0 ] 2>/dev/null; then
-    total_sec=$((duration_ms / 1000))
-    if [ "$total_sec" -lt 60 ]; then
-        duration_fmt="${total_sec}s"
-    elif [ "$total_sec" -lt 3600 ]; then
-        duration_fmt="$((total_sec / 60))m"
-    else
-        duration_fmt="$((total_sec / 3600))h$((total_sec % 3600 / 60))m"
-    fi
-    LINE1="${LINE1}${SEP}${GRAY}${duration_fmt}"
-fi
+[ -n "$WEEK_SEG" ] && LINE1="${LINE1}${SEP}${WEEK_SEG}"
 
 LINE2="${DIR_SEG}"
 [ -n "$GIT_SEG" ] && LINE2="${LINE2}${SEP}${GIT_SEG}"
